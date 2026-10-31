@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>แจ้งเคส Clinical Pharmacist IPD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+:root{
+  --bg:#f4f6f8; --card:#fff; --ink:#1c2a39; --muted:#6b7a8a; --line:#dde3e9;
+  --primary:#0f7b6c; --primary-d:#0b5f53; --primary-l:#e3f4f1; --danger:#d64545; --warn:#b26a00;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font-family:'Sarabun',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.wrap{max-width:640px;margin:0 auto;padding:0 14px}
+header{background:linear-gradient(135deg,var(--primary),var(--primary-d));color:#fff;padding:calc(18px + env(safe-area-inset-top)) 0 22px;margin-bottom:14px}
+header h1{margin:0;font-size:1.35rem;font-weight:700}
+header p{margin:2px 0 0;opacity:.88;font-size:.9rem}
+#who{margin-top:8px;font-size:.82rem;opacity:.9}
+.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(20,40,60,.07)}
+label.t{display:block;font-weight:600;margin-bottom:8px}
+label.t .req{color:var(--danger);margin-left:2px}
+label.t small{font-weight:400;color:var(--muted);margin-left:6px}
+.grid{display:grid;gap:8px}
+.grid.w{grid-template-columns:repeat(4,1fr)}
+.grid.s{grid-template-columns:repeat(2,1fr)}
+@media(max-width:380px){.grid.w{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:560px){.grid.w{grid-template-columns:repeat(5,1fr)}}
+.opt{border:1.5px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:12px 6px;font:inherit;font-weight:600;cursor:pointer;min-height:48px;transition:.12s;text-align:center}
+.opt.long{font-weight:500;padding:12px 10px;font-size:.95rem}
+.opt:active{transform:scale(.97)}
+.opt.on{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 6px rgba(15,123,108,.35)}
+input[type=text],textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;font:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:120px;resize:vertical}
+input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-l)}
+.err .opt,.err input,.err textarea{border-color:var(--danger)}
+.msg{display:none;color:var(--danger);font-size:.85rem;margin-top:6px}
+.err .msg{display:block}
+.photo-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pbtn{display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px dashed var(--primary);color:var(--primary-d);background:var(--primary-l);border-radius:10px;padding:13px 8px;font:inherit;font-weight:600;cursor:pointer}
+.pbtn svg{width:20px;height:20px;flex:none}
+.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.th{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#e9edf1}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th button{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.62);color:#fff;font-size:15px;line-height:1;cursor:pointer}
+.hint{color:var(--muted);font-size:.82rem;margin-top:8px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+.bar .in{max-width:640px;margin:0 auto}
+#send{width:100%;border:0;border-radius:12px;background:var(--primary);color:#fff;font:inherit;font-size:1.05rem;font-weight:700;padding:14px;cursor:pointer;box-shadow:0 2px 8px rgba(15,123,108,.35)}
+#send:disabled{background:#9db9b4;box-shadow:none}
+#banner{display:none;margin-bottom:12px;padding:10px 12px;border-radius:10px;background:#fff4e0;color:var(--warn);font-size:.88rem}
+#done{display:none;text-align:center;padding:48px 20px}
+#done .ck{width:72px;height:72px;border-radius:50%;background:var(--primary-l);color:var(--primary);display:grid;place-items:center;margin:0 auto 14px;font-size:38px}
+#done h2{margin:0 0 6px}
+#done p{margin:4px 0;color:var(--muted)}
+#done .again{margin-top:20px;border:1.5px solid var(--primary);color:var(--primary-d);background:#fff;border-radius:10px;padding:11px 22px;font:inherit;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>🩺 แจ้งเคส Clinical Pharmacist IPD</h1>
+    <p>แจ้งเภสัชกรผ่านไลน์ทันที</p>
+    <div id="who"></div>
+  </div>
+</header>
+
+<main class="wrap" id="formView">
+  <div id="banner"></div>
+
+  <div class="card" id="g-ward">
+    <label class="t">1. หน่วยงานที่แจ้ง (วอร์ด)<span class="req">*</span></label>
+    <div class="grid w" id="wards"></div>
+    <div class="msg">กรุณาเลือกวอร์ด</div>
+  </div>
+
+  <div class="card" id="g-service">
+    <label class="t">2. Service<span class="req">*</span></label>
+    <div class="grid s" id="services"></div>
+    <div class="msg">กรุณาเลือก Service</div>
+  </div>
+
+  <div class="card" id="g-hn">
+    <label class="t" for="hn">3. HN<span class="req">*</span></label>
+    <input type="text" id="hn" inputmode="numeric" autocomplete="off" placeholder="เช่น 6612345">
+    <div class="msg">กรุณากรอก HN</div>
+  </div>
+
+  <div class="card" id="g-detail">
+    <label class="t" for="detail">4. รายละเอียด<span class="req">*</span><small>ชื่อคนไข้, อาการแพ้ยา, ยาที่สงสัยแพ้, อื่นๆ</small></label>
+    <textarea id="detail" placeholder="เช่น นายสมชาย ใจดี / ผื่นขึ้นหลังได้ ceftriaxone / สงสัยแพ้ ceftriaxone"></textarea>
+    <div class="msg">กรุณากรอกรายละเอียด</div>
+  </div>
+
+  <div class="card">
+    <label class="t">5. แนบรูป<small>(ถ้ามี · สูงสุด <span id="maxN">4</span> รูป)</small></label>
+    <div class="photo-btns">
+      <button type="button" class="pbtn" id="btnCam">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        ถ่ายรูป
+      </button>
+      <button type="button" class="pbtn" id="btnFile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        เลือกจากเครื่อง
+      </button>
+    </div>
+    <input type="file" id="inCam" accept="image/*" capture="environment" hidden>
+    <input type="file" id="inFile" accept="image/*" multiple hidden>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="hint">รูปจะถูกย่อขนาดอัตโนมัติก่อนส่ง</div>
+  </div>
+</main>
+
+<section id="done" class="wrap">
+  <div class="ck">✓</div>
+  <h2 id="doneTitle">ส่งเรียบร้อย</h2>
+  <p id="doneSub">แจ้งเภสัชกรในไลน์แล้ว</p>
+  <button class="again" id="again">แจ้งเคสใหม่</button>
+</section>
+
+<div class="bar" id="bar"><div class="in"><button id="send">ส่งแจ้งเภสัชกร</button></div></div>
+
+<script>
+/* =========================================================
+   ตั้งค่า (แก้ 2 ค่านี้หลังสร้าง LIFF และ deploy Apps Script)
+   ========================================================= */
+const CONFIG = {
+  LIFF_ID: '',        // เช่น '1234567890-AbCdEfGh'
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbys3OUFW_d3PTQc-KDm7US9sO11-iUg2NK3Yt6ujeBGALSGRSMMgI2mrkUmrg4gcJdd/exec',        // URL ของ Apps Script Web App (ลงท้าย /exec)
+  MAX_PHOTOS: 4,      // LINE ส่งได้สูงสุด 5 ข้อความ/ครั้ง (Flex 1 + รูป 4)
+  IMG_MAX_SIDE: 1280, // ย่อด้านยาวสุดของรูป
+  IMG_QUALITY: 0.8
+};
+
+const WARDS = ['3B','3C','4A','4B','4C','5A','5C','6A','ICU-A','ICU-B'];
+const SERVICES = ['ประเมินแพ้ยา','Warfarin (เคสใหม่)','ยาเทคนิคพิเศษ','จ่ายยาผู้ป่วยกลับบ้าน (H/M)'];
+
+const $ = id => document.getElementById(id);
+const state = { ward:null, service:null, photos:[], profile:null, demo:false };
+
+/* ---------- UI: ปุ่มเลือก ---------- */
+function buildButtons(boxId, items, key, cls){
+  const box = $(boxId);
+  items.forEach(v=>{
+    const b = document.createElement('button');
+    b.type='button'; b.className='opt '+(cls||''); b.textContent=v;
+    b.onclick=()=>{
+      state[key]=v;
+      [...box.children].forEach(c=>c.classList.toggle('on',c===b));
+      box.closest('.card').classList.remove('err');
+    };
+    box.appendChild(b);
+  });
+}
+buildButtons('wards', WARDS, 'ward');
+buildButtons('services', SERVICES, 'service', 'long');
+$('maxN').textContent = CONFIG.MAX_PHOTOS;
+['hn','detail'].forEach(id=>$(id).addEventListener('input',e=>e.target.closest('.card').classList.remove('err')));
+
+/* ---------- รูป ---------- */
+$('btnCam').onclick = ()=>$('inCam').click();
+$('btnFile').onclick = ()=>$('inFile').click();
+$('inCam').onchange = e=>addFiles(e.target.files);
+$('inFile').onchange = e=>addFiles(e.target.files);
+
+async function addFiles(fileList){
+  const files = [...fileList];
+  for(const f of files){
+    if(state.photos.length>=CONFIG.MAX_PHOTOS){ toast(`แนบได้สูงสุด ${CONFIG.MAX_PHOTOS} รูป`); break; }
+    if(!f.type.startsWith('image/')) continue;
+    try{
+      const dataUrl = await compress(f);
+      state.photos.push(dataUrl);
+    }catch(err){ toast('อ่านรูปไม่ได้: '+f.name); }
+  }
+  $('inCam').value=''; $('inFile').value='';
+  renderThumbs();
+}
+function compress(file){
+  return new Promise((res,rej)=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload=()=>{
+      let {width:w,height:h}=img;
+      const s = Math.min(1, CONFIG.IMG_MAX_SIDE/Math.max(w,h));
+      w=Math.round(w*s); h=Math.round(h*s);
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+      ctx.drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg',CONFIG.IMG_QUALITY));
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej();};
+    img.src=url;
+  });
+}
+function renderThumbs(){
+  const box=$('thumbs'); box.innerHTML='';
+  state.photos.forEach((src,i)=>{
+    const d=document.createElement('div'); d.className='th';
+    const im=document.createElement('img'); im.src=src;
+    const x=document.createElement('button'); x.type='button'; x.textContent='×'; x.setAttribute('aria-label','ลบรูป');
+    x.onclick=()=>{state.photos.splice(i,1);renderThumbs();};
+    d.append(im,x); box.appendChild(d);
+  });
+}
+
+/* ---------- toast ---------- */
+function toast(t){
+  const b=$('banner'); b.textContent=t; b.style.display='block';
+  clearTimeout(toast._t); toast._t=setTimeout(()=>b.style.display='none',4000);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ---------- LIFF ---------- */
+async function init(){
+  if(!CONFIG.LIFF_ID){
+    state.demo=true;
+    $('who').textContent='โหมดทดสอบ (ยังไม่ได้ตั้งค่า LIFF_ID)';
+    return;
+  }
+  try{
+    await liff.init({liffId:CONFIG.LIFF_ID});
+    if(!liff.isLoggedIn()){ liff.login({redirectUri:location.href}); return; }
+    state.profile = await liff.getProfile();
+    $('who').textContent = 'ผู้แจ้ง: '+state.profile.displayName;
+  }catch(e){
+    console.error(e);
+    toast('เชื่อมต่อ LINE ไม่สำเร็จ: '+(e.message||e));
+  }
+}
+
+/* ---------- Flex message ---------- */
+function row(label,value,color){
+  return {type:'box',layout:'baseline',spacing:'sm',contents:[
+    {type:'text',text:label,size:'sm',color:'#8a97a5',flex:2},
+    {type:'text',text:value,size:'sm',color:color||'#1c2a39',flex:5,wrap:true,weight:'bold'}
+  ]};
+}
+function buildFlex(d){
+  return {
+    type:'flex',
+    altText:`🩺 เคส Clinical Pharmacist IPD — ${d.ward} · ${d.service} · HN ${d.hn}`,
+    contents:{
+      type:'bubble',size:'mega',
+      header:{type:'box',layout:'vertical',backgroundColor:'#0f7b6c',paddingAll:'14px',contents:[
+        {type:'text',text:'🩺 เคส Clinical Pharmacist IPD',color:'#ffffff',weight:'bold',size:'md'},
+        {type:'text',text:d.service,color:'#d7f1ec',size:'sm',margin:'xs',wrap:true}
+      ]},
+      body:{type:'box',layout:'vertical',spacing:'md',paddingAll:'14px',contents:[
+        row('วอร์ด',d.ward,'#0b5f53'),
+        row('HN',d.hn),
+        {type:'separator'},
+        {type:'text',text:'รายละเอียด',size:'xs',color:'#8a97a5'},
+        {type:'text',text:d.detail,size:'sm',wrap:true},
+        ...(d.images.length?[{type:'text',text:`📷 แนบรูป ${d.images.length} รูป (ด้านล่าง)`,size:'xs',color:'#8a97a5'}]:[])
+      ]},
+      footer:{type:'box',layout:'vertical',paddingAll:'10px',contents:[
+        {type:'text',text:`ผู้แจ้ง: ${d.reporter} · ${d.timeText}`,size:'xs',color:'#8a97a5',wrap:true}
+      ]}
+    }
+  };
+}
+
+/* ---------- ส่ง ---------- */
+function validate(){
+  let ok=true;
+  const mark=(id,bad)=>{ if(bad){ $(id).classList.add('err'); ok=false; } };
+  mark('g-ward',!state.ward);
+  mark('g-service',!state.service);
+  mark('g-hn',!$('hn').value.trim());
+  mark('g-detail',!$('detail').value.trim());
+  if(!ok){
+    const first=document.querySelector('.card.err');
+    if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+  return ok;
+}
+
+async function postGAS(payload){
+  // ใช้ text/plain เพื่อเลี่ยง CORS preflight ของ Apps Script
+  const r = await fetch(CONFIG.GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.error||'บันทึกไม่สำเร็จ');
+  return j;
+}
+
+$('send').onclick = async ()=>{
+  if(!validate()) return;
+  const btn=$('send'); btn.disabled=true; btn.textContent='กำลังส่ง…';
+  const now=new Date();
+  const d={
+    ward:state.ward, service:state.service,
+    hn:$('hn').value.trim(), detail:$('detail').value.trim(),
+    reporter: state.profile?state.profile.displayName:'(ทดสอบ)',
+    userId: state.profile?state.profile.userId:'',
+    timeText: now.toLocaleString('th-TH',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'})+' น.',
+    images:[]
+  };
+  try{
+    // 1) อัปโหลดรูป + บันทึกลงชีต
+    if(CONFIG.GAS_URL){
+      const res = await postGAS({action:'submit',data:{ward:d.ward,service:d.service,hn:d.hn,detail:d.detail,reporter:d.reporter,userId:d.userId},photos:state.photos});
+      d.images = res.imageUrls||[];
+    }else if(!state.demo){
+      throw new Error('ยังไม่ได้ตั้งค่า GAS_URL');
+    }
+    // 2) ส่งเข้าแชท/กลุ่มไลน์
+    const msgs=[buildFlex(d), ...d.images.map(u=>({type:'image',originalContentUrl:u,previewImageUrl:u}))];
+    let sent=false, note='';
+    if(state.demo){
+      console.log('DEMO messages',JSON.stringify(msgs,null,2));
+      note='โหมดทดสอบ: ยังไม่ได้ส่งเข้าไลน์ (ดู console)';
+    }else if(liff.isInClient()){
+      try{
+        await liff.sendMessages(msgs);
+        sent=true;
+      }catch(e){
+        console.warn('sendMessages failed',e);
+        if(liff.isApiAvailable('shareTargetPicker')){
+          const r=await liff.shareTargetPicker(msgs); sent=!!r; if(!r) note='ยกเลิกการเลือกปลายทาง';
+        }else throw e;
+      }
+    }else if(liff.isApiAvailable('shareTargetPicker')){
+      const r=await liff.shareTargetPicker(msgs); sent=!!r; if(!r) note='ยกเลิกการเลือกปลายทาง';
+    }else{
+      note='เปิดจากเบราว์เซอร์ภายนอก ส่งเข้าไลน์ไม่ได้ — กรุณาเปิดลิงก์จากในแชท/กลุ่มไลน์';
+    }
+    showDone(sent,note);
+  }catch(e){
+    console.error(e);
+    toast('ส่งไม่สำเร็จ: '+(e.message||e));
+    btn.disabled=false; btn.textContent='ส่งแจ้งเภสัชกร';
+  }
+};
+
+function showDone(sent,note){
+  $('formView').style.display='none'; $('bar').style.display='none'; $('done').style.display='block';
+  $('doneTitle').textContent = sent?'ส่งเรียบร้อย':'บันทึกแล้ว';
+  $('doneSub').textContent = sent?'แจ้งเภสัชกรในไลน์แล้ว':note;
+  window.scrollTo(0,0);
+  if(sent && typeof liff!=='undefined' && liff.isInClient && liff.isInClient()){
+    setTimeout(()=>{ try{liff.closeWindow();}catch(_){} },1800);
+  }
+}
+$('again').onclick=()=>{
+  state.ward=null; state.service=null; state.photos=[];
+  document.querySelectorAll('.opt.on').forEach(b=>b.classList.remove('on'));
+  $('hn').value=''; $('detail').value=''; renderThumbs();
+  $('formView').style.display='block'; $('bar').style.display='block'; $('done').style.display='none';
+  $('send').disabled=false; $('send').textContent='ส่งแจ้งเภสัชกร';
+  window.scrollTo(0,0);
+};
+
+init();
+</script>
+</body>
+</html>
