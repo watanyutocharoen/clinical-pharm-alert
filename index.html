@@ -254,10 +254,13 @@ function buildFlex(d){
       type:'bubble',size:'mega',
       header:{type:'box',layout:'vertical',backgroundColor:'#0f7b6c',paddingAll:'14px',contents:[
         {type:'text',text:'แผนกเภสัชกรรม โรงพยาบาลจุฬารัตน์ 9 แอร์พอร์ต',color:'#d7f1ec',size:'xxs',wrap:true},
-        {type:'text',text:'💊 Clinical Pharmacist IPD',color:'#ffffff',weight:'bold',size:'md',margin:'sm'},
-        {type:'text',text:d.service,color:'#d7f1ec',size:'sm',margin:'xs',wrap:true}
+        {type:'text',text:'💊 Clinical Pharmacist IPD',color:'#ffffff',weight:'bold',size:'md',margin:'sm'}
       ]},
       body:{type:'box',layout:'vertical',spacing:'md',paddingAll:'14px',contents:[
+        {type:'box',layout:'vertical',backgroundColor:'#e3f4f1',cornerRadius:'md',paddingAll:'12px',contents:[
+          {type:'text',text:'SERVICE',size:'xxs',color:'#0b5f53',weight:'bold'},
+          {type:'text',text:d.service,size:'xl',weight:'bold',color:'#0b5f53',wrap:true,margin:'xs'}
+        ]},
         row('วอร์ด',d.ward,'#0b5f53'),
         row('HN',d.hn),
         {type:'separator'},
