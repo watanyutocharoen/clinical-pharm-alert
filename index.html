@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>แจ้งเคส Clinical Pharmacist IPD</title>
+<title>แจ้ง Clinical Pharmacist IPD</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,10 +17,13 @@
 html,body{margin:0}
 body{font-family:'Sarabun',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .wrap{max-width:640px;margin:0 auto;padding:0 14px}
-header{background:linear-gradient(135deg,var(--primary),var(--primary-d));color:#fff;padding:calc(18px + env(safe-area-inset-top)) 0 22px;margin-bottom:14px}
+.brand{background:#fff;padding:calc(10px + env(safe-area-inset-top)) 0 10px}
+.brand img{display:block;height:56px;width:auto;max-width:100%;margin:0 auto}
+header{background:linear-gradient(135deg,var(--primary),var(--primary-d));color:#fff;padding:16px 0 20px;margin-bottom:14px}
 header h1{margin:0;font-size:1.35rem;font-weight:700}
-header p{margin:2px 0 0;opacity:.88;font-size:.9rem}
-#who{margin-top:8px;font-size:.82rem;opacity:.9}
+header .dept{margin:3px 0 0;font-size:.92rem;font-weight:600;opacity:.95}
+header .tag{margin:2px 0 0;opacity:.8;font-size:.82rem}
+#who{margin-top:6px;font-size:.82rem;opacity:.9}
 .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(20,40,60,.07)}
 label.t{display:block;font-weight:600;margin-bottom:8px}
 label.t .req{color:var(--danger);margin-left:2px}
@@ -61,10 +64,12 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 </style>
 </head>
 <body>
+<div class="brand"><div class="wrap"><img src="logo.png" alt="โรงพยาบาลจุฬารัตน์ 9 แอร์พอร์ต"></div></div>
 <header>
   <div class="wrap">
-    <h1>🩺 แจ้งเคส Clinical Pharmacist IPD</h1>
-    <p>แจ้งเภสัชกรผ่านไลน์ทันที</p>
+    <h1>💊 แจ้ง Clinical Pharmacist IPD</h1>
+    <p class="dept">แผนกเภสัชกรรม โรงพยาบาลจุฬารัตน์ 9 แอร์พอร์ต</p>
+    <p class="tag">แจ้งเภสัชกรผ่านไลน์ทันที</p>
     <div id="who"></div>
   </div>
 </header>
@@ -119,7 +124,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
   <div class="ck">✓</div>
   <h2 id="doneTitle">ส่งเรียบร้อย</h2>
   <p id="doneSub">แจ้งเภสัชกรในไลน์แล้ว</p>
-  <button class="again" id="again">แจ้งเคสใหม่</button>
+  <button class="again" id="again">แจ้งรายใหม่</button>
 </section>
 
 <div class="bar" id="bar"><div class="in"><button id="send">ส่งแจ้งเภสัชกร</button></div></div>
@@ -228,7 +233,6 @@ async function init(){
     await liff.init({liffId:CONFIG.LIFF_ID});
     if(!liff.isLoggedIn()){ liff.login({redirectUri:location.href}); return; }
     state.profile = await liff.getProfile();
-    $('who').textContent = 'ผู้แจ้ง: '+state.profile.displayName;
   }catch(e){
     console.error(e);
     toast('เชื่อมต่อ LINE ไม่สำเร็จ: '+(e.message||e));
@@ -245,11 +249,12 @@ function row(label,value,color){
 function buildFlex(d){
   return {
     type:'flex',
-    altText:`🩺 เคส Clinical Pharmacist IPD — ${d.ward} · ${d.service} · HN ${d.hn}`,
+    altText:`💊 Clinical Pharmacist IPD — ${d.ward} · ${d.service} · HN ${d.hn}`,
     contents:{
       type:'bubble',size:'mega',
       header:{type:'box',layout:'vertical',backgroundColor:'#0f7b6c',paddingAll:'14px',contents:[
-        {type:'text',text:'🩺 เคส Clinical Pharmacist IPD',color:'#ffffff',weight:'bold',size:'md'},
+        {type:'text',text:'แผนกเภสัชกรรม โรงพยาบาลจุฬารัตน์ 9 แอร์พอร์ต',color:'#d7f1ec',size:'xxs',wrap:true},
+        {type:'text',text:'💊 Clinical Pharmacist IPD',color:'#ffffff',weight:'bold',size:'md',margin:'sm'},
         {type:'text',text:d.service,color:'#d7f1ec',size:'sm',margin:'xs',wrap:true}
       ]},
       body:{type:'box',layout:'vertical',spacing:'md',paddingAll:'14px',contents:[
@@ -261,7 +266,7 @@ function buildFlex(d){
         ...(d.images.length?[{type:'text',text:`📷 แนบรูป ${d.images.length} รูป (ด้านล่าง)`,size:'xs',color:'#8a97a5'}]:[])
       ]},
       footer:{type:'box',layout:'vertical',paddingAll:'10px',contents:[
-        {type:'text',text:`ผู้แจ้ง: ${d.reporter} · ${d.timeText}`,size:'xs',color:'#8a97a5',wrap:true}
+        {type:'text',text:d.timeText,size:'xs',color:'#8a97a5',wrap:true}
       ]}
     }
   };
