@@ -56,6 +56,21 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 #send{width:100%;border:0;border-radius:12px;background:var(--primary);color:#fff;font:inherit;font-size:1.05rem;font-weight:700;padding:14px;cursor:pointer;box-shadow:0 2px 8px rgba(15,123,108,.35)}
 #send:disabled{background:#9db9b4;box-shadow:none}
 #banner{display:none;margin-bottom:12px;padding:10px 12px;border-radius:10px;background:#fff4e0;color:var(--warn);font-size:.88rem}
+.svc{background:var(--primary-l);color:var(--primary-d);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.svc small{display:block;font-size:.72rem;font-weight:700;letter-spacing:.04em}
+.svc b{display:block;font-size:1.35rem;line-height:1.3;margin-top:2px}
+.kv{display:flex;gap:10px;padding:5px 0}
+.kv span{color:var(--muted);flex:0 0 76px}
+.kv b{flex:1}
+.dtl{border-top:1px solid var(--line);margin-top:8px;padding-top:10px}
+.dtl span{color:var(--muted);font-size:.85rem}
+.dtl div{white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.bigbtn{width:100%;margin-top:12px;border:0;border-radius:12px;background:var(--primary);color:#fff;font:inherit;font-size:1.05rem;font-weight:700;padding:14px;cursor:pointer;box-shadow:0 2px 8px rgba(15,123,108,.35)}
+.bigbtn:disabled{background:#9db9b4;box-shadow:none}
+#ackDone{text-align:center;padding:28px 16px}
+#ackDone .ck{width:64px;height:64px;border-radius:50%;background:var(--primary-l);color:var(--primary);display:grid;place-items:center;margin:0 auto 10px;font-size:34px}
+#ackDone h2{margin:0 0 4px}
+#ackDone p{margin:2px 0;color:var(--muted)}
 #done{display:none;text-align:center;padding:48px 20px}
 #done .ck{width:72px;height:72px;border-radius:50%;background:var(--primary-l);color:var(--primary);display:grid;place-items:center;margin:0 auto 14px;font-size:38px}
 #done h2{margin:0 0 6px}
@@ -118,6 +133,23 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
     <div class="thumbs" id="thumbs"></div>
     <div class="hint">รูปจะถูกย่อขนาดอัตโนมัติก่อนส่ง</div>
   </div>
+</main>
+
+<main class="wrap" id="ackView" style="display:none">
+  <div class="card">
+    <div class="svc"><small>SERVICE</small><b id="ackService">…</b></div>
+    <div class="kv"><span>วอร์ด</span><b id="ackWard"></b></div>
+    <div class="kv"><span>HN</span><b id="ackHn"></b></div>
+    <div class="kv"><span>แจ้งเมื่อ</span><b id="ackAt"></b></div>
+    <div class="dtl"><span>รายละเอียด</span><div id="ackDetail"></div></div>
+  </div>
+  <div class="card" id="ackForm" style="display:none">
+    <label class="t" for="pharm">เภสัชกรผู้ดำเนินการ<span class="req">*</span></label>
+    <input type="text" id="pharm" placeholder="เช่น ภก.สมชาย ใจดี" autocomplete="name">
+    <div class="msg">กรุณาลงชื่อเภสัชกร</div>
+    <button type="button" class="bigbtn" id="ackBtn">✅ ดำเนินการแล้ว</button>
+  </div>
+  <div class="card" id="ackDone" style="display:none"></div>
 </main>
 
 <section id="done" class="wrap">
@@ -223,10 +255,23 @@ function toast(t){
 }
 
 /* ---------- LIFF ---------- */
+function getCaseId(){
+  const p = new URLSearchParams(location.search);
+  let c = p.get('case');
+  if(!c){
+    const s = p.get('liff.state');           // LIFF เก็บ query เดิมไว้ใน liff.state ก่อน init เสร็จ
+    if(s){ try{ c = new URLSearchParams(s.replace(/^[^?]*\?/,'')).get('case'); }catch(_){} }
+  }
+  return c ? c.trim() : '';
+}
+// ถ้าเปิดมาจากปุ่ม "ดำเนินการแล้ว" ให้ซ่อนฟอร์มแจ้งเคสทันที (กันภาพกระพริบ)
+if(getCaseId()){ $('formView').style.display='none'; $('bar').style.display='none'; }
+
 async function init(){
   if(!CONFIG.LIFF_ID){
     state.demo=true;
     $('who').textContent='โหมดทดสอบ (ยังไม่ได้ตั้งค่า LIFF_ID)';
+    const c0=getCaseId(); if(c0) showAck(c0);
     return;
   }
   try{
@@ -237,7 +282,65 @@ async function init(){
     console.error(e);
     toast('เชื่อมต่อ LINE ไม่สำเร็จ: '+(e.message||e));
   }
+  const c=getCaseId(); if(c) showAck(c);
 }
+
+/* ---------- หน้ายืนยัน "ดำเนินการแล้ว" (เปิดจากปุ่มในการ์ด) ---------- */
+let ackCase=null;
+function renderAckDone(data, already){
+  $('ackForm').style.display='none';
+  const box=$('ackDone'); box.style.display='block';
+  box.innerHTML='';
+  const ck=document.createElement('div'); ck.className='ck'; ck.textContent='✓';
+  const h=document.createElement('h2'); h.textContent = already?'มีผู้ดำเนินการแล้ว':'บันทึกเรียบร้อย';
+  const p1=document.createElement('p'); p1.textContent='เภสัชกรผู้ดำเนินการ: '+(data.pharmacist||'-');
+  const p2=document.createElement('p'); p2.textContent=data.doneAt?('เมื่อ '+data.doneAt):'';
+  box.append(ck,h,p1,p2);
+}
+async function showAck(id){
+  $('formView').style.display='none'; $('bar').style.display='none'; $('ackView').style.display='block';
+  try{
+    if(!CONFIG.GAS_URL) throw new Error('ยังไม่ได้ตั้งค่า GAS_URL');
+    const r=await fetch(CONFIG.GAS_URL+'?action=get&id='+encodeURIComponent(id));
+    const j=await r.json();
+    if(!j.ok) throw new Error(j.error||'โหลดข้อมูลไม่สำเร็จ');
+    const c=j.data; ackCase={id,data:c};
+    $('ackService').textContent=c.service; $('ackWard').textContent=c.ward; $('ackHn').textContent=c.hn;
+    $('ackAt').textContent=c.reportedAt; $('ackDetail').textContent=c.detail;
+    if(c.status==='ดำเนินการแล้ว'){ renderAckDone(c,true); return; }
+    let saved=''; try{ saved=localStorage.getItem('pharmName')||''; }catch(_){}
+    $('pharm').value = saved || (state.profile?state.profile.displayName:'');
+    $('ackForm').style.display='block';
+  }catch(e){
+    console.error(e);
+    $('ackService').textContent='โหลดไม่สำเร็จ';
+    toast('โหลดเคสไม่สำเร็จ: '+(e.message||e));
+  }
+}
+$('pharm').addEventListener('input',e=>e.target.closest('.card').classList.remove('err'));
+$('ackBtn').onclick=async ()=>{
+  const name=$('pharm').value.trim();
+  if(!name){ $('ackForm').classList.add('err'); return; }
+  if(!ackCase) return;
+  const btn=$('ackBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+  try{
+    const res=await postGAS({action:'complete',id:ackCase.id,pharmacist:name,userId:state.profile?state.profile.userId:''});
+    try{ localStorage.setItem('pharmName',name); }catch(_){}
+    const c=res.data;
+    renderAckDone(c,!!res.already);
+    // แจ้งในแชท/กลุ่มว่าใครรับเคสแล้ว (ถ้าส่งไม่ได้ ข้อมูลก็ยังอยู่ในชีต)
+    if(!res.already && !state.demo && liff.isInClient()){
+      try{
+        await liff.sendMessages([{type:'text',text:`✅ ดำเนินการแล้ว\n${c.service} · วอร์ด ${c.ward} · HN ${c.hn}\nโดย ${c.pharmacist}`}]);
+        setTimeout(()=>{ try{liff.closeWindow();}catch(_){} },1800);
+      }catch(e){ console.warn('notify failed',e); }
+    }
+  }catch(e){
+    console.error(e);
+    toast('บันทึกไม่สำเร็จ: '+(e.message||e));
+    btn.disabled=false; btn.textContent='✅ ดำเนินการแล้ว';
+  }
+};
 
 /* ---------- Flex message ---------- */
 function row(label,value,color){
@@ -268,8 +371,10 @@ function buildFlex(d){
         {type:'text',text:d.detail,size:'sm',wrap:true},
         ...(d.images.length?[{type:'text',text:`📷 แนบรูป ${d.images.length} รูป (ด้านล่าง)`,size:'xs',color:'#8a97a5'}]:[])
       ]},
-      footer:{type:'box',layout:'vertical',paddingAll:'10px',contents:[
-        {type:'text',text:d.timeText,size:'xs',color:'#8a97a5',wrap:true}
+      footer:{type:'box',layout:'vertical',spacing:'sm',paddingAll:'10px',contents:[
+        ...(d.caseId&&CONFIG.LIFF_ID?[{type:'button',style:'primary',color:'#0f7b6c',height:'sm',
+          action:{type:'uri',label:'✅ ดำเนินการแล้ว',uri:`https://liff.line.me/${CONFIG.LIFF_ID}?case=${d.caseId}`}}]:[]),
+        {type:'text',text:d.timeText,size:'xs',color:'#8a97a5',wrap:true,align:'center'}
       ]}
     }
   };
@@ -308,13 +413,14 @@ $('send').onclick = async ()=>{
     reporter: state.profile?state.profile.displayName:'(ทดสอบ)',
     userId: state.profile?state.profile.userId:'',
     timeText: now.toLocaleString('th-TH',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'})+' น.',
-    images:[]
+    images:[], caseId:''
   };
   try{
     // 1) อัปโหลดรูป + บันทึกลงชีต
     if(CONFIG.GAS_URL){
       const res = await postGAS({action:'submit',data:{ward:d.ward,service:d.service,hn:d.hn,detail:d.detail,reporter:d.reporter,userId:d.userId},photos:state.photos});
       d.images = res.imageUrls||[];
+      d.caseId = res.caseId||'';
     }else if(!state.demo){
       throw new Error('ยังไม่ได้ตั้งค่า GAS_URL');
     }
