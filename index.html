@@ -65,6 +65,16 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .dtl{border-top:1px solid var(--line);margin-top:8px;padding-top:10px}
 .dtl span{color:var(--muted);font-size:.85rem}
 .dtl div{white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.combo{position:relative}
+.combo input{padding-right:40px}
+.combo .clr{position:absolute;right:6px;top:6px;width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:20px;cursor:pointer;display:none}
+.combo.has .clr{display:block}
+.plist{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#fff;border:1.5px solid var(--line);border-radius:10px;max-height:240px;overflow-y:auto;z-index:20;box-shadow:0 8px 20px rgba(20,40,60,.16)}
+.plist[hidden]{display:none}
+.plist button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #eef1f4;background:#fff;color:var(--ink);font:inherit;padding:12px;cursor:pointer}
+.plist button:last-child{border-bottom:0}
+.plist button:active,.plist button.hl{background:var(--primary-l)}
+.plist .none{padding:12px;color:var(--muted);font-size:.9rem}
 .bigbtn{width:100%;margin-top:12px;border:0;border-radius:12px;background:var(--primary);color:#fff;font:inherit;font-size:1.05rem;font-weight:700;padding:14px;cursor:pointer;box-shadow:0 2px 8px rgba(15,123,108,.35)}
 .bigbtn:disabled{background:#9db9b4;box-shadow:none}
 #ackDone{text-align:center;padding:28px 16px}
@@ -145,8 +155,12 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
   </div>
   <div class="card" id="ackForm" style="display:none">
     <label class="t" for="pharm">เภสัชกรผู้ดำเนินการ<span class="req">*</span></label>
-    <input type="text" id="pharm" placeholder="เช่น ภก.สมชาย ใจดี" autocomplete="name">
-    <div class="msg">กรุณาลงชื่อเภสัชกร</div>
+    <div class="combo" id="pharmBox">
+      <input type="text" id="pharm" placeholder="พิมพ์ค้นหา หรือเลือกชื่อเภสัชกร" autocomplete="off" autocapitalize="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="pharmList">
+      <button type="button" class="clr" id="pharmClr" aria-label="ล้างชื่อ">×</button>
+      <div class="plist" id="pharmList" role="listbox" hidden></div>
+    </div>
+    <div class="msg" id="pharmMsg">กรุณาเลือกชื่อเภสัชกรจากรายการ</div>
     <button type="button" class="bigbtn" id="ackBtn">✅ ดำเนินการแล้ว</button>
   </div>
   <div class="card" id="ackDone" style="display:none"></div>
@@ -308,19 +322,94 @@ async function showAck(id){
     $('ackService').textContent=c.service; $('ackWard').textContent=c.ward; $('ackHn').textContent=c.hn;
     $('ackAt').textContent=c.reportedAt; $('ackDetail').textContent=c.detail;
     if(c.status==='ดำเนินการแล้ว'){ renderAckDone(c,true); return; }
-    let saved=''; try{ saved=localStorage.getItem('pharmName')||''; }catch(_){}
-    $('pharm').value = saved || (state.profile?state.profile.displayName:'');
     $('ackForm').style.display='block';
+    await loadPharmacists();
+    let saved=''; try{ saved=localStorage.getItem('pharmName')||''; }catch(_){}
+    const hit = pharmList.find(n=>nameKey(n)===nameKey(saved));
+    if(hit) choosePharm(hit);                       // จำชื่อที่เคยเลือกไว้ในเครื่องนี้
   }catch(e){
     console.error(e);
     $('ackService').textContent='โหลดไม่สำเร็จ';
     toast('โหลดเคสไม่สำเร็จ: '+(e.message||e));
   }
 }
-$('pharm').addEventListener('input',e=>e.target.closest('.card').classList.remove('err'));
+/* ---------- กล่องค้นหา + เลือกชื่อเภสัชกร ---------- */
+let pharmList=[], pharmChosen='', pharmLoaded=false, pharmHl=-1;
+const normName = s => String(s||'').replace(/\s+/g,' ').trim();
+const nameKey  = s => normName(s).toLowerCase().replace(/\s+/g,'');   // ค้นหาโดยไม่สนช่องว่าง/ตัวพิมพ์
+async function loadPharmacists(){
+  try{
+    const r=await fetch(CONFIG.GAS_URL+'?action=pharmacists');
+    const j=await r.json();
+    if(!j.ok) throw new Error(j.error||'โหลดรายชื่อไม่สำเร็จ');
+    pharmList=(j.list||[]).map(normName).filter(Boolean);
+    pharmLoaded=pharmList.length>0;
+  }catch(e){
+    console.warn('pharmacist list failed',e);
+    pharmLoaded=false;                                // โหลดไม่ได้ → ยอมให้พิมพ์ชื่อเองได้
+    $('pharm').placeholder='พิมพ์ชื่อเภสัชกร (โหลดรายชื่อไม่สำเร็จ)';
+  }
+}
+function pharmMatches(q){
+  const k=nameKey(q);
+  return pharmList.filter(n=>!k||nameKey(n).includes(k));
+}
+function openPharmList(q){
+  const box=$('pharmList'); box.innerHTML=''; pharmHl=-1;
+  if(!pharmLoaded){ box.hidden=true; return; }
+  const items=pharmMatches(q);
+  if(!items.length){
+    const d=document.createElement('div'); d.className='none';
+    d.textContent='ไม่พบชื่อนี้ — เพิ่มชื่อได้ในชีต "เภสัชกร"';
+    box.appendChild(d);
+  }else{
+    items.forEach(n=>{
+      const b=document.createElement('button'); b.type='button'; b.textContent=n; b.setAttribute('role','option');
+      b.onclick=()=>choosePharm(n);
+      box.appendChild(b);
+    });
+  }
+  box.hidden=false; $('pharm').setAttribute('aria-expanded','true');
+}
+function closePharmList(){ $('pharmList').hidden=true; $('pharm').setAttribute('aria-expanded','false'); }
+function choosePharm(n){
+  pharmChosen=n; $('pharm').value=n; $('pharmBox').classList.add('has');
+  $('ackForm').classList.remove('err'); closePharmList();
+}
+$('pharm').addEventListener('focus',()=>{
+  setTimeout(()=>{ try{ $('ackForm').scrollIntoView({block:'start',behavior:'smooth'}); }catch(_){} },200);
+  openPharmList(pharmChosen?'':$('pharm').value);
+});
+$('pharm').addEventListener('input',e=>{
+  const v=e.target.value;
+  const exact=pharmList.find(n=>nameKey(n)===nameKey(v));
+  pharmChosen = pharmLoaded ? (exact||'') : normName(v);
+  $('pharmBox').classList.toggle('has',!!v);
+  $('ackForm').classList.remove('err');
+  openPharmList(v);
+});
+$('pharm').addEventListener('keydown',e=>{
+  const btns=[...$('pharmList').querySelectorAll('button')];
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    if(!btns.length) return; e.preventDefault();
+    pharmHl=(pharmHl+(e.key==='ArrowDown'?1:-1)+btns.length)%btns.length;
+    btns.forEach((b,i)=>b.classList.toggle('hl',i===pharmHl)); btns[pharmHl].scrollIntoView({block:'nearest'});
+  }else if(e.key==='Enter'){
+    if(btns.length&&!$('pharmList').hidden){ e.preventDefault(); (btns[pharmHl]||btns[0]).click(); }
+  }else if(e.key==='Escape'){ closePharmList(); }
+});
+$('pharmClr').onclick=()=>{
+  pharmChosen=''; $('pharm').value=''; $('pharmBox').classList.remove('has'); $('pharm').focus(); openPharmList('');
+};
+document.addEventListener('pointerdown',e=>{ if(!e.target.closest('#pharmBox')) closePharmList(); });
+
 $('ackBtn').onclick=async ()=>{
-  const name=$('pharm').value.trim();
-  if(!name){ $('ackForm').classList.add('err'); return; }
+  // รายชื่อโหลดได้ → ต้องเลือกจากรายการ; โหลดไม่ได้ → ใช้ชื่อที่พิมพ์
+  const name = pharmLoaded ? pharmChosen : normName($('pharm').value);
+  if(!name){
+    $('pharmMsg').textContent = pharmLoaded ? 'กรุณาเลือกชื่อเภสัชกรจากรายการ' : 'กรุณาลงชื่อเภสัชกร';
+    $('ackForm').classList.add('err'); return;
+  }
   if(!ackCase) return;
   const btn=$('ackBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
   try{
