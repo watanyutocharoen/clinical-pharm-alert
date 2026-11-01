@@ -461,8 +461,10 @@ function buildFlex(d){
         ...(d.images.length?[{type:'text',text:`📷 แนบรูป ${d.images.length} รูป (ด้านล่าง)`,size:'xs',color:'#8a97a5'}]:[])
       ]},
       footer:{type:'box',layout:'vertical',spacing:'sm',paddingAll:'10px',contents:[
-        ...(d.caseId&&CONFIG.LIFF_ID?[{type:'button',style:'primary',color:'#0f7b6c',height:'sm',
-          action:{type:'uri',label:'✅ ดำเนินการแล้ว',uri:`https://liff.line.me/${CONFIG.LIFF_ID}?case=${d.caseId}`}}]:[]),
+        // ใช้กล่องที่กดได้แทน button เพราะ label ของ button จำกัด 20 ตัวอักษร (ข้อความนี้ยาวกว่า)
+        ...(d.caseId&&CONFIG.LIFF_ID?[{type:'box',layout:'vertical',backgroundColor:'#0f7b6c',cornerRadius:'md',paddingAll:'12px',
+          action:{type:'uri',label:'ลงชื่อ',uri:`https://liff.line.me/${CONFIG.LIFF_ID}?case=${d.caseId}`},
+          contents:[{type:'text',text:'✍️ ลงชื่อเภสัชกรผู้ดำเนินการ',color:'#ffffff',weight:'bold',size:'sm',align:'center',wrap:true}]}]:[]),
         {type:'text',text:d.timeText,size:'xs',color:'#8a97a5',wrap:true,align:'center'}
       ]}
     }
