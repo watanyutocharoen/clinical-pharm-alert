@@ -222,14 +222,40 @@ async function addFiles(fileList){
   const files = [...fileList];
   for(const f of files){
     if(state.photos.length>=CONFIG.MAX_PHOTOS){ toast(`แนบได้สูงสุด ${CONFIG.MAX_PHOTOS} รูป`); break; }
-    if(!f.type.startsWith('image/')) continue;
+    const isHeic = /\.(heic|heif)$/i.test(f.name) || /hei[cf]/i.test(f.type);
+    if(!f.type.startsWith('image/') && !isHeic) continue;
     try{
-      const dataUrl = await compress(f);
+      let dataUrl;
+      try{ dataUrl = await compress(f); }
+      catch(e1){
+        // เบราว์เซอร์ในไลน์อ่าน HEIC/HEIF ไม่ได้ -> แปลงเป็น JPEG ก่อน (โหลดตัวแปลงเฉพาะตอนจำเป็น)
+        toast('กำลังแปลงรูป…');
+        const jpg = await heicToJpeg(f);
+        dataUrl = await compress(jpg);
+      }
       state.photos.push(dataUrl);
     }catch(err){ toast('อ่านรูปไม่ได้: '+f.name); }
   }
   $('inCam').value=''; $('inFile').value='';
   renderThumbs();
+}
+let heicLib=null;
+function loadHeicLib(){
+  if(window.heic2any) return Promise.resolve(window.heic2any);
+  if(heicLib) return heicLib;
+  heicLib=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    s.onload=()=>res(window.heic2any); s.onerror=()=>{heicLib=null;rej(new Error('load'));};
+    document.head.appendChild(s);
+  });
+  return heicLib;
+}
+async function heicToJpeg(file){
+  const h=await loadHeicLib();
+  let out=await h({blob:file,toType:'image/jpeg',quality:0.85});
+  if(Array.isArray(out)) out=out[0];
+  return out;
 }
 function compress(file){
   return new Promise((res,rej)=>{
