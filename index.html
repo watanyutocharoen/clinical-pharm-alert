@@ -686,10 +686,10 @@ function svcBreak(rows){
   }).join('');
 }
 function renderDash(){
-  const rows=dash.rows, today=dash.today, yest=addDays(today,-1);
+  const rows=dash.rows, today=dash.today;
   const dayRows=d=>rows.filter(r=>r[0]===d);
-  const card=(label,d)=>{const a=dayRows(d); const done=a.filter(r=>r[3]).length;
-    return `<div class="dc"><small>${label}</small><b>${a.length}</b><i>${fmtDay(d)} · รับแล้ว ${done}</i></div>`;};
+  if(!dash.d) dash.d=today;
+  const dd=dash.d, dRows=dayRows(dd);
   // เดือน
   const ym=dash.ym, [yy,mm]=ym.split('-').map(Number);
   const mRows=rows.filter(r=>r[0].startsWith(ym));
@@ -701,9 +701,11 @@ function renderDash(){
   const perMonth=Array.from({length:12},(_,i)=>yRows.filter(r=>r[0].slice(5,7)===String(i+1).padStart(2,'0')).length);
   const years=[...new Set([...rows.map(r=>r[0].slice(0,4)),today.slice(0,4),yr])].sort();
   $('dBody').innerHTML=`
-    <div class="dcards">${card('วันนี้',today)}${card('เมื่อวาน',yest)}</div>
-    <div class="dsec"><h3>วันนี้ · แยกตาม Service และวอร์ด</h3>${svcBreak(dayRows(today))}</div>
-    <div class="dsec"><h3>เมื่อวาน · แยกตาม Service และวอร์ด</h3>${svcBreak(dayRows(yest))}</div>
+    <div class="dsec"><h3>รายวัน</h3>
+      <div class="pick"><button type="button" id="dPrev">‹</button><input type="date" id="dPick" value="${dd}" max="${today}"><button type="button" id="dNext">›</button></div>
+      <div class="tot">${fmtDay(dd)}${dd===today?' (วันนี้)':''} · รวม <b>${dRows.length}</b> เคส · รับแล้ว ${dRows.filter(r=>r[3]).length}</div>
+      ${svcBreak(dRows)}
+    </div>
     <div class="dsec"><h3>รายเดือน</h3>
       <div class="pick"><button type="button" id="mPrev">‹</button><input type="month" id="mPick" value="${ym}"><button type="button" id="mNext">›</button></div>
       <div class="tot">${TH_M[mm-1]} ${yy+543} · รวม <b>${mRows.length}</b> เคส · รับแล้ว ${mRows.filter(r=>r[3]).length}</div>
@@ -716,6 +718,9 @@ function renderDash(){
       ${chart(perMonth,TH_M,1)}
       <h3 style="margin-top:14px;font-size:15px">แยกตาม Service และวอร์ด</h3>${svcBreak(yRows)}
     </div>`;
+  const shiftD=n=>{const x=addDays(dd,n); if(x<=today){dash.d=x; renderDash();}};
+  $('dPrev').onclick=()=>shiftD(-1); $('dNext').onclick=()=>shiftD(1);
+  $('dPick').onchange=e=>{ if(/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)&&e.target.value<=today){dash.d=e.target.value; renderDash();} };
   const shiftM=n=>{const d=new Date(yy,mm-1+n,1); dash.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderDash();};
   $('mPrev').onclick=()=>shiftM(-1); $('mNext').onclick=()=>shiftM(1);
   $('mPick').onchange=e=>{ if(/^\d{4}-\d{2}$/.test(e.target.value)){dash.ym=e.target.value; renderDash();} };
