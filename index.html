@@ -114,6 +114,23 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .sv{margin:8px 0 12px}.sv .l{display:flex;justify-content:space-between;font-size:14.5px}.sv .t{height:8px;background:var(--primary-l);border-radius:5px;overflow:hidden;margin:3px 0 5px}.sv .t div{height:100%;background:var(--primary)}
 .chips{display:flex;flex-wrap:wrap;gap:5px}.chips span{background:#f0f3f6;border-radius:8px;padding:2px 8px;font-size:12.5px;color:var(--ink)}.chips span b{color:var(--primary-d)}
 .dsec h4{margin:0 0 6px;font-size:15px}
+
+.fl{display:flex;gap:6px;margin:4px 0 10px;flex-wrap:wrap}.fl button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font:600 13px 'Sarabun',sans-serif;color:var(--muted);cursor:pointer}.fl button.on{background:var(--primary-l);border-color:var(--primary);color:var(--primary-d)}
+.cs{border:1.5px solid var(--line);border-left:5px solid var(--warn);border-radius:12px;padding:11px 12px;margin:9px 0;background:#fff}
+.cs.ok{border-left-color:var(--primary)}
+.cs .top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cs .sv2{font-weight:700;font-size:15.5px;flex:1;min-width:140px}
+.cs .wd{background:var(--primary);color:#fff;border-radius:8px;padding:1px 9px;font-weight:700;font-size:13px}
+.cs .tm{color:var(--muted);font-size:12.5px}
+.cs .hn{margin:5px 0 2px;font-size:14px;color:var(--muted)}.cs .hn b{color:var(--ink)}
+.cs .dt{font-size:14.5px;white-space:pre-wrap;word-break:break-word;margin:2px 0 8px}
+.cs .dt.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cs .more{border:none;background:none;color:var(--primary);font:600 13px 'Sarabun',sans-serif;padding:0;margin:-4px 0 8px;cursor:pointer}
+.cs .st{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px}
+.badge{border-radius:999px;padding:2px 10px;font-weight:700;font-size:12.5px}
+.badge.p{background:#fff2dc;color:var(--warn)}.badge.d{background:var(--primary-l);color:var(--primary-d)}
+.sign{margin-left:auto;border:none;background:var(--primary);color:#fff;border-radius:10px;padding:8px 14px;font:700 14px 'Sarabun',sans-serif;cursor:pointer}
+@media(max-width:420px){.sign{width:100%;margin:4px 0 0}}
 </style>
 </head>
 <body>
@@ -627,7 +644,7 @@ init();
 
 /* ---------- Dashboard ---------- */
 const TH_M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const dash={rows:null,today:null,ym:null,y:null,loading:false};
+const dash={rows:null,today:null,ym:null,y:null,loading:false,days:{},dayErr:{},filter:'all'};
 function bkkToday(){ return new Date(Date.now()+7*3600e3).toISOString().slice(0,10); }
 function addDays(s,n){ const d=new Date(s+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
 function fmtDay(s){ const [y,m,d]=s.split('-').map(Number); return `${d} ${TH_M[m-1]} ${y+543}`; }
@@ -641,7 +658,7 @@ function setTab(t){
 }
 $('tabForm').onclick=()=>setTab('form');
 $('tabDash').onclick=()=>setTab('dash');
-$('dRefresh').onclick=()=>loadDash(true);
+$('dRefresh').onclick=()=>{dash.days={};loadDash(true);};
 async function loadDash(force){
   if(dash.loading) return;
   if(dash.rows && !force){ renderDash(); return; }
@@ -685,6 +702,41 @@ function svcBreak(rows){
     return `<div class="sv"><div class="l"><span>${esc(k)}</span><b>${bySvc[k].length}</b></div><div class="t"><div style="width:${bySvc[k].length/mx*100}%"></div></div><div class="chips">${wk.map(x=>`<span>${esc(x)} <b>×${w[x]}</b></span>`).join('')}</div></div>`;
   }).join('');
 }
+/* ---------- รายการเคสรายวัน ---------- */
+async function loadDayCases(d,force){
+  if(!force && dash.days[d]){ renderCases(); return; }
+  $('dCases').innerHTML='<div class="dmsg">กำลังโหลดรายการ…</div>';
+  try{
+    const r=await fetch(CONFIG.GAS_URL+'?action=day&date='+encodeURIComponent(d));
+    const j=await r.json();
+    if(!j.ok||!j.cases) throw new Error('bad');
+    dash.days[d]=j.cases; delete dash.dayErr[d];
+  }catch(e){ dash.dayErr[d]=1; }
+  if(dash.d===d) renderCases();
+}
+function renderCases(){
+  const box=$('dCases'); if(!box) return;
+  const d=dash.d, list=dash.days[d];
+  if(dash.dayErr[d]||!list){ box.innerHTML='<div class="dmsg">โหลดรายการไม่ได้ · กดรีเฟรชเพื่อลองใหม่</div>'; $('dFilter').innerHTML=''; return; }
+  const np=list.filter(c=>!c.done).length, nd=list.length-np;
+  const f=dash.filter;
+  $('dFilter').innerHTML=[['all','ทั้งหมด',list.length],['p','รอดำเนินการ',np],['d','ดำเนินการแล้ว',nd]].map(([k,t,n])=>`<button type="button" data-f="${k}" class="${f===k?'on':''}">${t} ${n}</button>`).join('');
+  $('dFilter').querySelectorAll('button').forEach(b=>b.onclick=()=>{dash.filter=b.dataset.f; renderCases();});
+  const shown=list.filter(c=>f==='all'||(f==='p'?!c.done:c.done)).slice().sort((a,b)=>(a.done-b.done)||b.time.localeCompare(a.time));
+  if(!shown.length){ box.innerHTML='<div class="dmsg" style="padding:8px 0">ไม่มีเคส</div>'; return; }
+  box.innerHTML=shown.map((c,i)=>{
+    const long=(c.detail||'').length>110||(c.detail||'').split('\n').length>3;
+    return `<div class="cs ${c.done?'ok':''}">
+      <div class="top"><span class="sv2">${esc(c.service)}</span><span class="wd">${esc(c.ward)}</span><span class="tm">${esc(c.time)} น.</span></div>
+      <div class="hn">HN <b>${esc(c.hn)}</b></div>
+      <div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
+      <div class="st">${c.done
+        ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>`
+        :`<span class="badge p">⏳ รอดำเนินการ</span>${c.id?`<button type="button" class="sign" data-id="${esc(c.id)}">✍️ ลงชื่อดำเนินการ</button>`:''}`}</div>
+    </div>`;}).join('');
+  box.querySelectorAll('.more').forEach(b=>b.onclick=()=>{const el=$('cd'+b.dataset.i); const c=el.classList.toggle('clamp'); b.textContent=c?'ดูเพิ่มเติม ▾':'ย่อ ▴';});
+  box.querySelectorAll('.sign').forEach(b=>b.onclick=()=>{ location.href=location.pathname+'?case='+encodeURIComponent(b.dataset.id); });
+}
 function renderDash(){
   const rows=dash.rows, today=dash.today;
   const dayRows=d=>rows.filter(r=>r[0]===d);
@@ -705,6 +757,9 @@ function renderDash(){
       <div class="pick"><button type="button" id="dPrev">‹</button><input type="date" id="dPick" value="${dd}" max="${today}"><button type="button" id="dNext">›</button></div>
       <div class="tot">${fmtDay(dd)}${dd===today?' (วันนี้)':''} · รวม <b>${dRows.length}</b> เคส · รับแล้ว ${dRows.filter(r=>r[3]).length}</div>
       ${svcBreak(dRows)}
+      <h3 style="margin:14px 0 6px;font-size:15px">รายการเคส</h3>
+      <div class="fl" id="dFilter"></div>
+      <div id="dCases"><div class="dmsg">กำลังโหลดรายการ…</div></div>
     </div>
     <div class="dsec"><h3>รายเดือน</h3>
       <div class="pick"><button type="button" id="mPrev">‹</button><input type="month" id="mPick" value="${ym}"><button type="button" id="mNext">›</button></div>
@@ -726,6 +781,7 @@ function renderDash(){
   $('mPick').onchange=e=>{ if(/^\d{4}-\d{2}$/.test(e.target.value)){dash.ym=e.target.value; renderDash();} };
   $('yPrev').onclick=()=>{dash.y=String(+yr-1); renderDash();}; $('yNext').onclick=()=>{dash.y=String(+yr+1); renderDash();};
   $('yPick').onchange=e=>{dash.y=e.target.value; renderDash();};
+  loadDayCases(dd);
 }
 </script>
 </body>
