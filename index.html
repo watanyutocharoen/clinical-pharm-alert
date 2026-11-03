@@ -111,6 +111,9 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .hb{margin:6px 0;font-size:14px}.hb .l{display:flex;justify-content:space-between}.hb .t{height:8px;background:var(--primary-l);border-radius:5px;overflow:hidden;margin-top:2px}.hb .t div{height:100%;background:var(--primary)}
 .dmsg{text-align:center;color:var(--muted);padding:18px 0}
 .rbtn{border:none;background:var(--primary-l);color:var(--primary-d);border-radius:10px;padding:8px 14px;font:600 14px 'Sarabun',sans-serif;cursor:pointer}
+.sv{margin:8px 0 12px}.sv .l{display:flex;justify-content:space-between;font-size:14.5px}.sv .t{height:8px;background:var(--primary-l);border-radius:5px;overflow:hidden;margin:3px 0 5px}.sv .t div{height:100%;background:var(--primary)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}.chips span{background:#f0f3f6;border-radius:8px;padding:2px 8px;font-size:12.5px;color:var(--ink)}.chips span b{color:var(--primary-d)}
+.dsec h4{margin:0 0 6px;font-size:15px}
 </style>
 </head>
 <body>
@@ -672,6 +675,16 @@ function chart(vals,labels,every){
   const ax=labels.map((l,i)=>`<span>${(i%every===0)?l:''}</span>`).join('');
   return `<div class="chart">${cols}</div><div class="axis">${ax}</div>`;
 }
+function svcBreak(rows){
+  if(!rows.length) return '<div class="dmsg" style="padding:6px 0">ไม่มีเคส</div>';
+  const bySvc={}; rows.forEach(r=>{(bySvc[r[2]]=bySvc[r[2]]||[]).push(r);});
+  const keys=Object.keys(bySvc).sort((a,b)=>{const ia=SERVICES.indexOf(a),ib=SERVICES.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});
+  const mx=Math.max(...keys.map(k=>bySvc[k].length));
+  return keys.map(k=>{
+    const w=countBy(bySvc[k],r=>r[1]); const wk=Object.keys(w).sort((a,b)=>w[b]-w[a]||(WARDS.indexOf(a)-WARDS.indexOf(b)));
+    return `<div class="sv"><div class="l"><span>${esc(k)}</span><b>${bySvc[k].length}</b></div><div class="t"><div style="width:${bySvc[k].length/mx*100}%"></div></div><div class="chips">${wk.map(x=>`<span>${esc(x)} <b>×${w[x]}</b></span>`).join('')}</div></div>`;
+  }).join('');
+}
 function renderDash(){
   const rows=dash.rows, today=dash.today, yest=addDays(today,-1);
   const dayRows=d=>rows.filter(r=>r[0]===d);
@@ -689,18 +702,19 @@ function renderDash(){
   const years=[...new Set([...rows.map(r=>r[0].slice(0,4)),today.slice(0,4),yr])].sort();
   $('dBody').innerHTML=`
     <div class="dcards">${card('วันนี้',today)}${card('เมื่อวาน',yest)}</div>
+    <div class="dsec"><h3>วันนี้ · แยกตาม Service และวอร์ด</h3>${svcBreak(dayRows(today))}</div>
+    <div class="dsec"><h3>เมื่อวาน · แยกตาม Service และวอร์ด</h3>${svcBreak(dayRows(yest))}</div>
     <div class="dsec"><h3>รายเดือน</h3>
       <div class="pick"><button type="button" id="mPrev">‹</button><input type="month" id="mPick" value="${ym}"><button type="button" id="mNext">›</button></div>
       <div class="tot">${TH_M[mm-1]} ${yy+543} · รวม <b>${mRows.length}</b> เคส · รับแล้ว ${mRows.filter(r=>r[3]).length}</div>
       ${chart(perDay,perDay.map((_,i)=>i+1),dim>28?3:2)}
-      <h3 style="margin-top:14px;font-size:15px">แยกตามวอร์ด</h3>${hbars(mRows,1,WARDS)}
-      <h3 style="margin-top:14px;font-size:15px">แยกตาม Service</h3>${hbars(mRows,2,SERVICES)}
+      <h3 style="margin-top:14px;font-size:15px">แยกตาม Service และวอร์ด</h3>${svcBreak(mRows)}
     </div>
     <div class="dsec"><h3>รายปี</h3>
       <div class="pick"><button type="button" id="yPrev">‹</button><select id="yPick">${years.map(y=>`<option value="${y}"${y===yr?' selected':''}>พ.ศ. ${+y+543} (${y})</option>`).join('')}</select><button type="button" id="yNext">›</button></div>
       <div class="tot">ปี ${+yr+543} · รวม <b>${yRows.length}</b> เคส · รับแล้ว ${yRows.filter(r=>r[3]).length}</div>
       ${chart(perMonth,TH_M,1)}
-      <h3 style="margin-top:14px;font-size:15px">แยกตาม Service</h3>${hbars(yRows,2,SERVICES)}
+      <h3 style="margin-top:14px;font-size:15px">แยกตาม Service และวอร์ด</h3>${svcBreak(yRows)}
     </div>`;
   const shiftM=n=>{const d=new Date(yy,mm-1+n,1); dash.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderDash();};
   $('mPrev').onclick=()=>shiftM(-1); $('mNext').onclick=()=>shiftM(1);
