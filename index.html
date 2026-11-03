@@ -131,6 +131,10 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .badge.p{background:#fff2dc;color:var(--warn)}.badge.d{background:var(--primary-l);color:var(--primary-d)}
 .sign{margin-left:auto;border:none;background:var(--primary);color:#fff;border-radius:10px;padding:8px 14px;font:700 14px 'Sarabun',sans-serif;cursor:pointer}
 @media(max-width:420px){.sign{width:100%;margin:4px 0 0}}
+.del{border:1.5px solid #f0c4c4;background:#fff;color:var(--danger);border-radius:10px;padding:7px 12px;font:700 13.5px 'Sarabun',sans-serif;cursor:pointer}
+.del.go{background:var(--danger);border-color:var(--danger);color:#fff}
+.acts{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}.acts .sign{margin-left:0}
+@media(max-width:420px){.acts{width:100%;margin-left:0}.acts .sign{flex:1;width:auto}.acts .del{flex:0 0 auto}}
 </style>
 </head>
 <body>
@@ -399,6 +403,7 @@ async function showAck(id){
     const c=j.data; ackCase={id,data:c};
     $('ackService').textContent=c.service; $('ackWard').textContent=c.ward; $('ackHn').textContent=c.hn;
     $('ackAt').textContent=c.reportedAt; $('ackDetail').textContent=c.detail;
+    if(c.status==='ลบแล้ว'){ $('ackService').textContent='🗑 เคสนี้ถูกลบแล้ว'; return; }
     if(c.status==='ดำเนินการแล้ว'){ renderAckDone(c,true); return; }
     $('ackForm').style.display='block';
     await loadPharmacists();
@@ -714,6 +719,19 @@ async function loadDayCases(d,force){
   }catch(e){ dash.dayErr[d]=1; }
   if(dash.d===d) renderCases();
 }
+async function deleteCase(id,btn){
+  btn.disabled=true; btn.textContent='กำลังลบ…';
+  try{
+    await postGAS({action:'delete',id,by:state.profile?state.profile.displayName:''});
+    const d=dash.d; dash.days[d]=(dash.days[d]||[]).filter(c=>c.id!==id);
+    toast('ลบเคสแล้ว');
+    loadDash(true);          // โหลดตัวเลขสรุปใหม่
+  }catch(e){
+    btn.disabled=false; btn.classList.remove('go'); btn.textContent='🗑 ลบ';
+    toast('ลบไม่ได้: '+(e.message||e));
+    dash.days={}; loadDayCases(dash.d,true);   // ซิงก์สถานะล่าสุด (เช่น มีคนลงชื่อไปแล้ว)
+  }
+}
 function renderCases(){
   const box=$('dCases'); if(!box) return;
   const d=dash.d, list=dash.days[d];
@@ -732,9 +750,13 @@ function renderCases(){
       <div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
       <div class="st">${c.done
         ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>`
-        :`<span class="badge p">⏳ รอดำเนินการ</span>${c.id?`<button type="button" class="sign" data-id="${esc(c.id)}">✍️ ลงชื่อดำเนินการ</button>`:''}`}</div>
+        :`<span class="badge p">⏳ รอดำเนินการ</span>${c.id?`<span class="acts"><button type="button" class="sign" data-id="${esc(c.id)}">✍️ ลงชื่อดำเนินการ</button><button type="button" class="del" data-id="${esc(c.id)}">🗑 ลบ</button></span>`:''}`}</div>
     </div>`;}).join('');
   box.querySelectorAll('.more').forEach(b=>b.onclick=()=>{const el=$('cd'+b.dataset.i); const c=el.classList.toggle('clamp'); b.textContent=c?'ดูเพิ่มเติม ▾':'ย่อ ▴';});
+  box.querySelectorAll('.del').forEach(b=>b.onclick=()=>{
+    if(!b.classList.contains('go')){ b.classList.add('go'); b.textContent='ยืนยันลบ?'; clearTimeout(b._t); b._t=setTimeout(()=>{b.classList.remove('go'); b.textContent='🗑 ลบ';},4000); return; }
+    deleteCase(b.dataset.id,b);
+  });
   box.querySelectorAll('.sign').forEach(b=>b.onclick=()=>{ location.href=location.pathname+'?case='+encodeURIComponent(b.dataset.id); });
 }
 function renderDash(){
