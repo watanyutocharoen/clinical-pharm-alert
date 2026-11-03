@@ -86,6 +86,31 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 #done h2{margin:0 0 6px}
 #done p{margin:4px 0;color:var(--muted)}
 #done .again{margin-top:20px;border:1.5px solid var(--primary);color:var(--primary-d);background:#fff;border-radius:10px;padding:11px 22px;font:inherit;font-weight:600;cursor:pointer}
+
+/* ---- tabs + dashboard ---- */
+.tabs{display:flex;gap:6px;padding:10px 14px 0}
+.tabs button{flex:1;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px;font:600 15px 'Sarabun',sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.dcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.dc{background:#fff;border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.dc small{color:var(--muted);display:block;font-size:13px}
+.dc b{display:block;font-size:40px;line-height:1.1;color:var(--primary);margin:4px 0}
+.dc i{font-style:normal;font-size:12.5px;color:var(--muted)}
+.dsec{background:#fff;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.dsec h3{margin:0 0 8px;font-size:17px}
+.pick{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pick button{border:1.5px solid var(--line);background:#fff;border-radius:10px;width:38px;height:38px;font-size:18px;cursor:pointer}
+.pick input,.pick select{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:10px;height:38px;padding:0 10px;font:600 15px 'Sarabun',sans-serif;background:#fff}
+.tot{font-size:15px;color:var(--muted);margin:2px 0 10px}.tot b{font-size:26px;color:var(--primary)}
+.chart{display:flex;align-items:flex-end;gap:2px;height:130px;padding-top:16px;border-bottom:1px solid var(--line)}
+.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0}
+.chart .col span{font-size:10px;color:var(--ink);line-height:1.2}
+.chart .col div{width:100%;max-width:22px;background:var(--primary);border-radius:3px 3px 0 0;min-height:0}
+.chart .col.z div{background:transparent}
+.axis{display:flex;gap:2px}.axis span{flex:1;text-align:center;font-size:10px;color:var(--muted);min-width:0}
+.hb{margin:6px 0;font-size:14px}.hb .l{display:flex;justify-content:space-between}.hb .t{height:8px;background:var(--primary-l);border-radius:5px;overflow:hidden;margin-top:2px}.hb .t div{height:100%;background:var(--primary)}
+.dmsg{text-align:center;color:var(--muted);padding:18px 0}
+.rbtn{border:none;background:var(--primary-l);color:var(--primary-d);border-radius:10px;padding:8px 14px;font:600 14px 'Sarabun',sans-serif;cursor:pointer}
 </style>
 </head>
 <body>
@@ -98,6 +123,13 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
     <div id="who"></div>
   </div>
 </header>
+
+<div class="wrap tabs" id="tabs"><button type="button" id="tabForm" class="on">แจ้งเคส</button><button type="button" id="tabDash">📊 Dashboard</button></div>
+
+<main class="wrap" id="dashView" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><b>จำนวนเคสที่แจ้ง</b><button type="button" class="rbtn" id="dRefresh">↻ รีเฟรช</button></div>
+  <div id="dBody"><div class="dmsg">กำลังโหลด…</div></div>
+</main>
 
 <main class="wrap" id="formView">
   <div id="banner"></div>
@@ -305,7 +337,7 @@ function getCaseId(){
   return c ? c.trim() : '';
 }
 // ถ้าเปิดมาจากปุ่ม "ดำเนินการแล้ว" ให้ซ่อนฟอร์มแจ้งเคสทันที (กันภาพกระพริบ)
-if(getCaseId()){ $('formView').style.display='none'; $('bar').style.display='none'; }
+if(getCaseId()){ $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; }
 
 async function init(){
   if(!CONFIG.LIFF_ID){
@@ -338,7 +370,7 @@ function renderAckDone(data, already){
   box.append(ck,h,p1,p2);
 }
 async function showAck(id){
-  $('formView').style.display='none'; $('bar').style.display='none'; $('ackView').style.display='block';
+  $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; $('ackView').style.display='block';
   try{
     if(!CONFIG.GAS_URL) throw new Error('ยังไม่ได้ตั้งค่า GAS_URL');
     const r=await fetch(CONFIG.GAS_URL+'?action=get&id='+encodeURIComponent(id));
@@ -571,7 +603,7 @@ $('send').onclick = async ()=>{
 };
 
 function showDone(sent,note){
-  $('formView').style.display='none'; $('bar').style.display='none'; $('done').style.display='block';
+  $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; $('done').style.display='block';
   $('doneTitle').textContent = sent?'ส่งเรียบร้อย':'บันทึกแล้ว';
   $('doneSub').textContent = sent?'แจ้งเภสัชกรในไลน์แล้ว':note;
   window.scrollTo(0,0);
@@ -583,12 +615,99 @@ $('again').onclick=()=>{
   state.ward=null; state.service=null; state.photos=[];
   document.querySelectorAll('.opt.on').forEach(b=>b.classList.remove('on'));
   $('hn').value=''; $('detail').value=''; renderThumbs();
-  $('formView').style.display='block'; $('bar').style.display='block'; $('done').style.display='none';
+  $('formView').style.display='block'; $('bar').style.display='block'; $('tabs').style.display='flex'; $('done').style.display='none';
   $('send').disabled=false; $('send').textContent='ส่งแจ้งเภสัชกร';
   window.scrollTo(0,0);
 };
 
 init();
+
+/* ---------- Dashboard ---------- */
+const TH_M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const dash={rows:null,today:null,ym:null,y:null,loading:false};
+function bkkToday(){ return new Date(Date.now()+7*3600e3).toISOString().slice(0,10); }
+function addDays(s,n){ const d=new Date(s+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function fmtDay(s){ const [y,m,d]=s.split('-').map(Number); return `${d} ${TH_M[m-1]} ${y+543}`; }
+function setTab(t){
+  const isD=t==='dash';
+  $('tabForm').classList.toggle('on',!isD); $('tabDash').classList.toggle('on',isD);
+  $('dashView').style.display=isD?'block':'none';
+  $('formView').style.display=isD?'none':'block';
+  $('bar').style.display=isD?'none':'block';
+  if(isD) loadDash();
+}
+$('tabForm').onclick=()=>setTab('form');
+$('tabDash').onclick=()=>setTab('dash');
+$('dRefresh').onclick=()=>loadDash(true);
+async function loadDash(force){
+  if(dash.loading) return;
+  if(dash.rows && !force){ renderDash(); return; }
+  dash.loading=true;
+  if(!dash.rows) $('dBody').innerHTML='<div class="dmsg">กำลังโหลด…</div>';
+  try{
+    if(!CONFIG.GAS_URL) throw new Error('no url');
+    const r=await fetch(CONFIG.GAS_URL+'?action=stats');
+    const j=await r.json();
+    if(!j.ok||!j.rows) throw new Error('bad');
+    dash.rows=j.rows; dash.today=j.today||bkkToday();
+    if(!dash.ym) dash.ym=dash.today.slice(0,7);
+    if(!dash.y) dash.y=dash.today.slice(0,4);
+    renderDash();
+  }catch(e){
+    $('dBody').innerHTML='<div class="dmsg">โหลดข้อมูลไม่ได้ (ถ้าเพิ่งอัปเดต ต้อง deploy Apps Script เวอร์ชันใหม่) · กดรีเฟรชเพื่อลองใหม่</div>';
+  }finally{ dash.loading=false; }
+}
+function countBy(rows,keyFn){ const m={}; rows.forEach(r=>{const k=keyFn(r); m[k]=(m[k]||0)+1;}); return m; }
+function hbars(rows,idx,order){
+  const m=countBy(rows,r=>r[idx]); const keys=Object.keys(m);
+  if(order) keys.sort((a,b)=>(order.indexOf(a)<0?99:order.indexOf(a))-(order.indexOf(b)<0?99:order.indexOf(b))); else keys.sort((a,b)=>m[b]-m[a]);
+  const mx=Math.max(1,...keys.map(k=>m[k]));
+  if(!keys.length) return '<div class="dmsg" style="padding:6px 0">ไม่มีข้อมูล</div>';
+  return keys.map(k=>`<div class="hb"><div class="l"><span>${esc(k)}</span><b>${m[k]}</b></div><div class="t"><div style="width:${m[k]/mx*100}%"></div></div></div>`).join('');
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function chart(vals,labels,every){
+  const mx=Math.max(1,...vals);
+  const cols=vals.map(v=>`<div class="col${v?'':' z'}"><span>${v||''}</span><div style="height:${v/mx*100*0.78}%"></div></div>`).join('');
+  const ax=labels.map((l,i)=>`<span>${(i%every===0)?l:''}</span>`).join('');
+  return `<div class="chart">${cols}</div><div class="axis">${ax}</div>`;
+}
+function renderDash(){
+  const rows=dash.rows, today=dash.today, yest=addDays(today,-1);
+  const dayRows=d=>rows.filter(r=>r[0]===d);
+  const card=(label,d)=>{const a=dayRows(d); const done=a.filter(r=>r[3]).length;
+    return `<div class="dc"><small>${label}</small><b>${a.length}</b><i>${fmtDay(d)} · รับแล้ว ${done}</i></div>`;};
+  // เดือน
+  const ym=dash.ym, [yy,mm]=ym.split('-').map(Number);
+  const mRows=rows.filter(r=>r[0].startsWith(ym));
+  const dim=new Date(yy,mm,0).getDate();
+  const perDay=Array.from({length:dim},(_,i)=>mRows.filter(r=>r[0]===`${ym}-${String(i+1).padStart(2,'0')}`).length);
+  // ปี
+  const yr=dash.y;
+  const yRows=rows.filter(r=>r[0].startsWith(yr+'-'));
+  const perMonth=Array.from({length:12},(_,i)=>yRows.filter(r=>r[0].slice(5,7)===String(i+1).padStart(2,'0')).length);
+  const years=[...new Set([...rows.map(r=>r[0].slice(0,4)),today.slice(0,4),yr])].sort();
+  $('dBody').innerHTML=`
+    <div class="dcards">${card('วันนี้',today)}${card('เมื่อวาน',yest)}</div>
+    <div class="dsec"><h3>รายเดือน</h3>
+      <div class="pick"><button type="button" id="mPrev">‹</button><input type="month" id="mPick" value="${ym}"><button type="button" id="mNext">›</button></div>
+      <div class="tot">${TH_M[mm-1]} ${yy+543} · รวม <b>${mRows.length}</b> เคส · รับแล้ว ${mRows.filter(r=>r[3]).length}</div>
+      ${chart(perDay,perDay.map((_,i)=>i+1),dim>28?3:2)}
+      <h3 style="margin-top:14px;font-size:15px">แยกตามวอร์ด</h3>${hbars(mRows,1,WARDS)}
+      <h3 style="margin-top:14px;font-size:15px">แยกตาม Service</h3>${hbars(mRows,2,SERVICES)}
+    </div>
+    <div class="dsec"><h3>รายปี</h3>
+      <div class="pick"><button type="button" id="yPrev">‹</button><select id="yPick">${years.map(y=>`<option value="${y}"${y===yr?' selected':''}>พ.ศ. ${+y+543} (${y})</option>`).join('')}</select><button type="button" id="yNext">›</button></div>
+      <div class="tot">ปี ${+yr+543} · รวม <b>${yRows.length}</b> เคส · รับแล้ว ${yRows.filter(r=>r[3]).length}</div>
+      ${chart(perMonth,TH_M,1)}
+      <h3 style="margin-top:14px;font-size:15px">แยกตาม Service</h3>${hbars(yRows,2,SERVICES)}
+    </div>`;
+  const shiftM=n=>{const d=new Date(yy,mm-1+n,1); dash.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderDash();};
+  $('mPrev').onclick=()=>shiftM(-1); $('mNext').onclick=()=>shiftM(1);
+  $('mPick').onchange=e=>{ if(/^\d{4}-\d{2}$/.test(e.target.value)){dash.ym=e.target.value; renderDash();} };
+  $('yPrev').onclick=()=>{dash.y=String(+yr-1); renderDash();}; $('yNext').onclick=()=>{dash.y=String(+yr+1); renderDash();};
+  $('yPick').onchange=e=>{dash.y=e.target.value; renderDash();};
+}
 </script>
 </body>
 </html>
