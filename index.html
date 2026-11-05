@@ -141,6 +141,14 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .scanbtn:disabled{opacity:.6}
 .scaninfo{margin-top:8px;font-size:13.5px;background:#fff8e6;border:1px solid #f1dca6;border-radius:10px;padding:8px 10px;color:#6b4e00}
 .scaninfo .chips{margin-top:6px}.scaninfo .chips button{border:1.5px solid var(--primary);background:#fff;color:var(--primary-d);border-radius:8px;padding:2px 9px;font:700 13px 'Sarabun',sans-serif;cursor:pointer}
+
+#camOv{position:fixed;inset:0;background:#000;z-index:9999;display:none;flex-direction:column}
+#camOv video{flex:1;min-height:0;width:100%;object-fit:cover}
+#camFrame{position:absolute;left:5%;right:5%;border:3px solid #4ade80;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.55);pointer-events:none}
+#camHint{position:absolute;left:0;right:0;color:#fff;text-align:center;font-weight:600;padding:0 16px;text-shadow:0 1px 4px #000}
+#camBar{display:flex;justify-content:space-between;align-items:center;padding:14px 22px calc(14px + env(safe-area-inset-bottom));background:#000}
+#camBar button{border:0;border-radius:99px;font:inherit;font-weight:600;padding:10px 16px;background:#333;color:#fff}
+#camShot{width:68px;height:68px;padding:0!important;background:#fff!important;border:5px solid #4ade80!important}
 </style>
 </head>
 <body>
@@ -299,7 +307,7 @@ function getOcrWorker(){
 }
 function fileToImg(file){ return new Promise((res,rej)=>{ const u=URL.createObjectURL(file); const i=new Image(); i.onload=()=>res(i); i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('img'));}; i.src=u; }); }
 function prepCanvas(img,width,blur){
-  const s=width/img.naturalWidth, w=width, h=Math.round(img.naturalHeight*s);
+  const iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height, s=width/iw, w=width, h=Math.round(ih*s);
   const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d');
   x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(img,0,0,w,h);
   const d=x.getImageData(0,0,w,h), p=d.data, g=new Uint8ClampedArray(w*h), hist=new Uint32Array(256);
@@ -311,12 +319,13 @@ function prepCanvas(img,width,blur){
   x.putImageData(d,0,0); return c;
 }
 const NAME_PREFIX='(?:นางสาว|นาย|นาง|น\\.ส\\.|นส\\.|เด็กชาย|เด็กหญิง|ด\\.ช\\.|ด\\.ญ\\.|ดช\\.|ดญ\\.)';
+const PFX=/^(นาย|นาง|น\.|เด็ก|ด\.|ดช|ดญ)/;
 const NAME_STOP=/วันเกิด|รับเกิด|เดือน|ไม่ทราบ|นพ|พญ|ทพ|room|alert|ชาย|หญิง|primary|ห้อง|แพทย์|โรงพยาบาล|อายุ|โรง|พยาบาล|แอร์|จุฬา|อันตราย|ตามแพทย์/i;
 function parseOcr(text){
   const lines=String(text).split('\n').map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
   let name='', nameIdx=-1;
   const re=new RegExp('('+NAME_PREFIX+')\\s*([ก-๙]{2,})\\s+([ก-๙]{2,})');
-  for(let i=0;i<lines.length;i++){ const m=lines[i].match(re); if(m){ name=m[1]+' '+m[2]+' '+m[3]; nameIdx=i; break; } }
+  for(let i=0;i<lines.length;i++){ const m=lines[i].match(re)||lines[i].replace(/(^|\s)[ก-๙](?=\s|$)/g,' ').match(re); if(m){ name=m[1]+' '+m[2]+' '+m[3]; nameIdx=i; break; } }
   if(!name){   // ชื่ออยู่บรรทัดเหนือ "วันเกิด/วันที่" เสมอ
     const dob=lines.findIndex(l=>/เกิด|\d{1,2}\/\d{1,2}\/\d{4}/.test(l));
     for(let i=dob-1;i>=0&&i>=dob-2;i--){
@@ -357,22 +366,47 @@ function rankHn(scores,longs){
   r.slice().forEach(x=>{ if(x.length===9&&x[0]!=='0'&&!r.includes(x.slice(1))) r.push(x.slice(1)); });   // อักษรนำหน้า (พ./H) อาจถูกอ่านเป็นเลข
   return r;
 }
+function cropLabel(img){   // หาแผ่น label สีขาวในภาพแล้วตัดเฉพาะส่วนนั้น เพื่อให้ตัวอักษรใหญ่ขึ้น
+  try{
+    const W=img.naturalWidth||img.width,H=img.naturalHeight||img.height, sc=300/W, w=300, h=Math.round(H*sc);
+    const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d'); x.drawImage(img,0,0,w,h);
+    const d=x.getImageData(0,0,w,h).data, col=new Array(w).fill(0), row=new Array(h).fill(0);
+    for(let j=0;j<h;j++)for(let i=0;i<w;i++){const k=(j*w+i)*4,r=d[k],g=d[k+1],b=d[k+2];
+      if(Math.min(r,g,b)>185&&Math.max(r,g,b)-Math.min(r,g,b)<30){col[i]++;row[j]++;}}
+    const mc=Math.max(...col),mr=Math.max(...row); if(mc<10||mr<10) return null;
+    const x0=col.findIndex(v=>v>=mc*.25),x1=w-1-[...col].reverse().findIndex(v=>v>=mc*.25);
+    const y0=row.findIndex(v=>v>=mr*.25),y1=h-1-[...row].reverse().findIndex(v=>v>=mr*.25);
+    const area=(x1-x0)*(y1-y0)/(w*h); if(area<0.04||area>0.8) return null;
+    const mx=(x1-x0)*.04,my=(y1-y0)*.08, sx=Math.max(0,x0-mx)/sc,sy=Math.max(0,y0-my)/sc,sw=Math.min(W,(x1+mx)/sc)-sx,sh=Math.min(H,(y1+my)/sc)-sy;
+    const o=document.createElement('canvas'); o.width=sw; o.height=sh; o.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,sw,sh); return o;
+  }catch(_){return null;}
+}
 async function scanImage(file){
   const info=$('scanInfo'), btns=[$('btnScanCam'),$('btnScanFile')];
   btns.forEach(b=>b.disabled=true); info.style.display='block'; info.textContent='กำลังอ่านรูป… (ครั้งแรกอาจช้า ต้องโหลดตัวอ่านภาพ)';
   try{
     let img; try{ img=await fileToImg(file); }catch(_){ img=await fileToImg(await heicToJpeg(file)); }
     const worker=await getOcrWorker();
-    const passes=[[1400,true,'11'],[1800,true,'6'],[900,true,'11']];
+    const crop=cropLabel(img);
+    const passes=(crop?[[1400,true,'11',crop],[1400,true,'6',crop]]:[]).concat([[1400,true,'11'],[1800,true,'6'],[900,true,'11']]);
     let best={hn:[],name:''}; const score={}, longs=[];
     let pi=0;
-    for(const [w,bl,psm] of passes){ pi++;
+    for(const [w,bl,psm,src] of passes){ pi++;
       await worker.setParameters({tessedit_pageseg_mode:psm});
-      const r=await worker.recognize(prepCanvas(img,w,bl));
+      const r=await worker.recognize(prepCanvas(src||img,w,bl));
       const p=parseOcr(r.data.text);
       Object.keys(p.hn).forEach(k=>{ score[k]=(score[k]||0)+p.hn[k]; }); longs.push(...p.longs); best.hn=rankHn(score,longs);
-      const PFX=/^(นาย|นาง|น\.|เด็ก|ด\.|ดช|ดญ)/; if(p.name&&(!best.name||(!PFX.test(best.name)&&PFX.test(p.name)))) best.name=p.name;
-      if(pi>=2&&best.hn.some(x=>x.length>=8)&&best.name&&PFX.test(best.name)) break;
+      if(p.name&&(!best.name||(!PFX.test(best.name)&&PFX.test(p.name)))) best.name=p.name;
+      if(pi>=(crop?2:2)&&best.hn.some(x=>x.length>=8)&&best.name&&PFX.test(best.name)) break;
+    }
+    if(!(best.name&&PFX.test(best.name))&&!file._rot){   // ถ่ายผิดทิศ -> ลองหมุน
+      for(const a of [90,270]){
+        const c=document.createElement('canvas'), W=img.naturalWidth||img.width, H=img.naturalHeight||img.height; c.width=H; c.height=W; const x=c.getContext('2d');
+        x.translate(H/2,W/2); x.rotate(a*Math.PI/180); x.drawImage(img,-W/2,-H/2);
+        const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.95)); const f2=new File([blob],'r.jpg',{type:'image/jpeg'}); f2._rot=1;
+        const p=parseOcr((await worker.recognize(prepCanvas(c,1400,true))).data.text);
+        if(p.name&&PFX.test(p.name)){ return await scanImage(f2); }
+      }
     }
     if(!best.hn.length&&!best.name){ info.textContent='อ่านไม่ออก ลองถ่ายใหม่ให้ชัดและเห็นเฉพาะส่วนชื่อ/HN หรือพิมพ์เอง'; return; }
     if(best.hn[0]){ $('hn').value=best.hn[0]; $('g-hn').classList.remove('err'); }
@@ -386,7 +420,40 @@ async function scanImage(file){
   }catch(e){ info.textContent='อ่านรูปไม่ได้: '+(e.message||e)+' · พิมพ์เองได้เลย'; }
   finally{ btns.forEach(b=>b.disabled=false); $('inScan').value=''; $('inScanCam').value=''; }
 }
-$('btnScanCam').onclick=()=>$('inScanCam').click();
+
+/* ---------- กล้องพร้อมกรอบ label ---------- */
+let camStream=null;
+function camClose(){ if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;} $('camOv').style.display='none'; }
+async function camOpen(){
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw 0;
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+  }catch(_){ $('inScanCam').click(); return; }   // ใช้กล้องเครื่องแทน
+  const v=$('camVid'); v.srcObject=camStream; await v.play().catch(()=>{});
+  $('camOv').style.display='flex'; layoutFrame();
+}
+function layoutFrame(){
+  const v=$('camVid'), f=$('camFrame'), r=v.getBoundingClientRect(), w=r.width*.9, h=Math.min(w/2.2,r.height*.6);
+  f.style.height=h+'px'; f.style.top=(r.top+(r.height-h)/2)+'px'; $('camHint').style.top=(r.top+(r.height-h)/2-52)+'px';
+}
+function camShot(){
+  const v=$('camVid'), vw=v.videoWidth, vh=v.videoHeight; if(!vw) return;
+  const r=v.getBoundingClientRect(), k=Math.max(r.width/vw,r.height/vh);      // object-fit: cover
+  const ox=(vw*k-r.width)/2, oy=(vh*k-r.height)/2, f=$('camFrame').getBoundingClientRect();
+  const m=.06, fx=f.left-r.left, fy=f.top-r.top, mx=f.width*m, my=f.height*m;
+  const sx=Math.max(0,(fx-mx+ox)/k), sy=Math.max(0,(fy-my+oy)/k), sw=Math.min(vw-sx,(f.width+2*mx)/k), sh=Math.min(vh-sy,(f.height+2*my)/k);
+  const c=document.createElement('canvas'); c.width=sw; c.height=sh; c.getContext('2d').drawImage(v,sx,sy,sw,sh,0,0,sw,sh);
+  camClose(); c.toBlob(b=>{ if(b) scanImage(new File([b],'label.jpg',{type:'image/jpeg'})); },'image/jpeg',.95);
+}
+(function(){
+  const o=document.createElement('div'); o.id='camOv';
+  o.innerHTML='<video id="camVid" playsinline muted></video><div id="camFrame"></div><div id="camHint">วาง label ให้พอดีกรอบเขียว<br>ถือแนวนอน ให้ตัวหนังสือตรง ไม่เอียง</div><div id="camBar"><button type="button" id="camCancel">ยกเลิก</button><button type="button" id="camShot" aria-label="ถ่าย"></button><button type="button" id="camNative">กล้องเครื่อง</button></div>';
+  document.body.appendChild(o);
+  $('camCancel').onclick=camClose; $('camShot').onclick=camShot;
+  $('camNative').onclick=()=>{ camClose(); $('inScanCam').click(); };
+  window.addEventListener('resize',()=>{ if($('camOv').style.display==='flex') layoutFrame(); });
+})();
+$('btnScanCam').onclick=camOpen;
 $('btnScanFile').onclick=()=>$('inScan').click();
 ['inScanCam','inScan'].forEach(id=>$(id).onchange=e=>{ const f=e.target.files[0]; if(f) scanImage(f); });
 
