@@ -348,7 +348,10 @@ function parseOcr(text){
   lines.forEach((l,i)=>{
     if(l.length>60) return;   // บรรทัดยาวผิดปกติ = ขยะจากลายจอ
     const labeled=/(h\s*\.?\s*n|ห\s*\.?\s*[ผพฟน]|เอช)/i.test(l);
-    (l.match(/(?<![\d\/])\d{6,9}(?![\d\/])/g)||[]).forEach(m=>{
+    let seg=l; const cut=l.split(/\s[-–—]\s/)[0];   // "H.N. 650502657 - V.N.6911..." -> เอาเฉพาะก่อนขีด (ตัด VN ทิ้ง)
+    if(cut!==l&&/(?<![\d\/])\d{6,9}(?![\d\/])/.test(cut)) seg=cut;
+    seg=seg.replace(/V\s*\.?\s*N\s*\.?\s*\d+/gi,' ');
+    (seg.match(/(?<![\d\/])\d{6,9}(?![\d\/])/g)||[]).forEach(m=>{
       if(/(\d)\1{4,}/.test(m)||new Set(m).size<4) return;          // ขยะจากลายจอ เช่น 333333510
       let s=1+(labeled?5:0)+(m.length===9?2:0)+(nameIdx>=0&&Math.abs(i-nameIdx)<=2?3:0);
       hn[m]=(hn[m]||0)+s;
