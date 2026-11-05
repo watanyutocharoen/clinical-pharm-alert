@@ -176,14 +176,19 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
     <div class="msg">กรุณากรอก HN</div>
   </div>
 
+  <div class="card" id="g-pname">
+    <label class="t" for="pname">4. ชื่อ - นามสกุล<span class="req">*</span><small>ชื่อผู้ป่วย</small></label>
+    <input type="text" id="pname" autocomplete="off" placeholder="เช่น นายสมชาย ใจดี">
+    <div class="msg">กรุณากรอกชื่อ - นามสกุล</div>
+  </div>
+
   <div class="card" id="g-detail">
-    <label class="t" for="detail">4. รายละเอียด<span class="req">*</span><small>ชื่อคนไข้, อาการแพ้ยา, ยาที่สงสัยแพ้, ชื่อยาเทคนิคพิเศษที่จะให้สอนใช้, อื่นๆ</small></label>
-    <textarea id="detail" placeholder="เช่น นายสมชาย ใจดี / ผื่นขึ้นหลังได้ ceftriaxone / สงสัยแพ้ ceftriaxone"></textarea>
-    <div class="msg">กรุณากรอกรายละเอียด</div>
+    <label class="t" for="detail">5. รายละเอียด<small>(ถ้ามี) เช่น อาการแพ้ยา, ยาที่สงสัยแพ้, ชื่อยาเทคนิคพิเศษที่จะให้สอนใช้, อื่นๆ</small></label>
+    <textarea id="detail" placeholder="เช่น ผื่นขึ้นหลังได้ ceftriaxone / สงสัยแพ้ ceftriaxone"></textarea>
   </div>
 
   <div class="card">
-    <label class="t">5. แนบรูป<small>(ถ้ามี · สูงสุด <span id="maxN">4</span> รูป) เช่น รูปอาการแพ้ยา, รูป Label ผู้ป่วย</small></label>
+    <label class="t">6. แนบรูป<small>(ถ้ามี · สูงสุด <span id="maxN">4</span> รูป) เช่น รูปอาการแพ้ยา, รูป Label ผู้ป่วย</small></label>
     <div class="photo-btns">
       <button type="button" class="pbtn" id="btnCam">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -206,6 +211,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
     <div class="svc"><small>SERVICE</small><b id="ackService">…</b></div>
     <div class="kv"><span>วอร์ด</span><b id="ackWard"></b></div>
     <div class="kv"><span>HN</span><b id="ackHn"></b></div>
+    <div class="kv"><span>ชื่อ-สกุล</span><b id="ackName"></b></div>
     <div class="kv"><span>แจ้งเมื่อ</span><b id="ackAt"></b></div>
     <div class="dtl"><span>รายละเอียด</span><div id="ackDetail"></div></div>
   </div>
@@ -266,7 +272,7 @@ function buildButtons(boxId, items, key, cls){
 buildButtons('wards', WARDS, 'ward');
 buildButtons('services', SERVICES, 'service', 'long');
 $('maxN').textContent = CONFIG.MAX_PHOTOS;
-['hn','detail'].forEach(id=>$(id).addEventListener('input',e=>e.target.closest('.card').classList.remove('err')));
+['hn','pname','detail'].forEach(id=>$(id).addEventListener('input',e=>e.target.closest('.card').classList.remove('err')));
 
 /* ---------- รูป ---------- */
 $('btnCam').onclick = ()=>$('inCam').click();
@@ -404,7 +410,7 @@ async function showAck(id){
     if(!j.ok) throw new Error(j.error||'โหลดข้อมูลไม่สำเร็จ');
     const c=j.data; ackCase={id,data:c};
     $('ackService').textContent=c.service; $('ackWard').textContent=c.ward; $('ackHn').textContent=c.hn;
-    $('ackAt').textContent=c.reportedAt; $('ackDetail').textContent=c.detail;
+    $('ackAt').textContent=c.reportedAt; $('ackName').textContent=c.pname||'-'; $('ackDetail').textContent=c.detail||'-';
     if(c.status==='ลบแล้ว'){ $('ackService').textContent='🗑 เคสนี้ถูกลบแล้ว'; return; }
     if(c.status==='ดำเนินการแล้ว'){ renderAckDone(c,true); return; }
     $('ackForm').style.display='block';
@@ -540,9 +546,10 @@ function buildFlex(d){
         ]},
         row('วอร์ด',d.ward,'#0b5f53'),
         row('HN',d.hn),
-        {type:'separator'},
+        row('ชื่อ-สกุล',d.pname),
+        ...(d.detail?[{type:'separator'},
         {type:'text',text:'รายละเอียด',size:'xs',color:'#8a97a5'},
-        {type:'text',text:d.detail,size:'sm',wrap:true},
+        {type:'text',text:d.detail,size:'sm',wrap:true}]:[{type:'separator'}]),
         ...(d.images.length?[{type:'text',text:`📷 แนบรูป ${d.images.length} รูป (ด้านล่าง)`,size:'xs',color:'#8a97a5'}]:[])
       ]},
       footer:{type:'box',layout:'vertical',spacing:'sm',paddingAll:'10px',contents:[
@@ -563,7 +570,7 @@ function validate(){
   mark('g-ward',!state.ward);
   mark('g-service',!state.service);
   mark('g-hn',!$('hn').value.trim());
-  mark('g-detail',!$('detail').value.trim());
+  mark('g-pname',!$('pname').value.trim());
   if(!ok){
     const first=document.querySelector('.card.err');
     if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
@@ -585,7 +592,7 @@ $('send').onclick = async ()=>{
   const now=new Date();
   const d={
     ward:state.ward, service:state.service,
-    hn:$('hn').value.trim(), detail:$('detail').value.trim(),
+    hn:$('hn').value.trim(), pname:$('pname').value.trim(), detail:$('detail').value.trim(),
     reporter: state.profile?state.profile.displayName:'(ทดสอบ)',
     userId: state.profile?state.profile.userId:'',
     timeText: now.toLocaleString('th-TH',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'})+' น.',
@@ -594,7 +601,7 @@ $('send').onclick = async ()=>{
   try{
     // 1) อัปโหลดรูป + บันทึกลงชีต
     if(CONFIG.GAS_URL){
-      const res = await postGAS({action:'submit',data:{ward:d.ward,service:d.service,hn:d.hn,detail:d.detail,reporter:d.reporter,userId:d.userId},photos:state.photos});
+      const res = await postGAS({action:'submit',data:{ward:d.ward,service:d.service,hn:d.hn,pname:d.pname,detail:d.detail,reporter:d.reporter,userId:d.userId},photos:state.photos});
       d.images = res.imageUrls||[];
       d.caseId = res.caseId||'';
     }else if(!state.demo){
@@ -641,7 +648,7 @@ function showDone(sent,note){
 $('again').onclick=()=>{
   state.ward=null; state.service=null; state.photos=[];
   document.querySelectorAll('.opt.on').forEach(b=>b.classList.remove('on'));
-  $('hn').value=''; $('detail').value=''; renderThumbs();
+  $('hn').value=''; $('pname').value=''; $('detail').value=''; renderThumbs();
   $('formView').style.display='block'; $('bar').style.display='block'; $('tabs').style.display='flex'; $('done').style.display='none';
   $('send').disabled=false; $('send').textContent='ส่งแจ้งเภสัชกร';
   window.scrollTo(0,0);
@@ -765,12 +772,12 @@ async function makeReport(){
     matrix('รายวัน','วันที่',dateRange(first,lastD).reverse(),c=>c.date,fmtD);
     matrix('รายเดือน','เดือน',monthRange(first.slice(0,7),lastD.slice(0,7)).reverse(),c=>c.date.slice(0,7),fmtM);
     const ws=wb.addWorksheet('ข้อมูลดิบ',{views:[{state:'frozen',ySplit:1}]});
-    ws.columns=[{header:'วันที่',key:'date',width:12},{header:'เวลา',key:'time',width:8},{header:'วอร์ด',key:'ward',width:9},{header:'Service',key:'service',width:26},{header:'HN',key:'hn',width:13},{header:'รายละเอียด',key:'detail',width:60},{header:'สถานะ',key:'st',width:16},{header:'เภสัชกรผู้ดำเนินการ',key:'ph',width:30},{header:'เวลาดำเนินการ',key:'da',width:17}];
+    ws.columns=[{header:'วันที่',key:'date',width:12},{header:'เวลา',key:'time',width:8},{header:'วอร์ด',key:'ward',width:9},{header:'Service',key:'service',width:26},{header:'HN',key:'hn',width:13},{header:'ชื่อ-นามสกุล',key:'pname',width:26},{header:'รายละเอียด',key:'detail',width:60},{header:'สถานะ',key:'st',width:16},{header:'เภสัชกรผู้ดำเนินการ',key:'ph',width:30},{header:'เวลาดำเนินการ',key:'da',width:17}];
     styleHead(ws.getRow(1));
-    cases.forEach(c=>{ const r=ws.addRow({date:fmtD(c.date),time:c.time,ward:c.ward,service:c.service,hn:String(c.hn),detail:c.detail,st:c.done?'ดำเนินการแล้ว':'รอดำเนินการ',ph:c.pharmacist,da:c.doneAt?(fmtD(c.doneAt.slice(0,10))+' '+c.doneAt.slice(11)):''});
+    cases.forEach(c=>{ const r=ws.addRow({date:fmtD(c.date),time:c.time,ward:c.ward,service:c.service,hn:String(c.hn),pname:c.pname||'',detail:c.detail,st:c.done?'ดำเนินการแล้ว':'รอดำเนินการ',ph:c.pharmacist,da:c.doneAt?(fmtD(c.doneAt.slice(0,10))+' '+c.doneAt.slice(11)):''});
       r.getCell('hn').numFmt='@'; r.getCell('detail').alignment={wrapText:true,vertical:'top'};
       r.getCell('st').font={color:{argb:c.done?'FF0B5F53':'FFB26A00'},bold:true}; });
-    ws.autoFilter={from:'A1',to:'I1'};
+    ws.autoFilter={from:'A1',to:'J1'};
     ws.eachRow(r=>{ r.eachCell(c=>{ c.font={name:'Sarabun',...(c.font||{})}; }); });
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -821,8 +828,8 @@ function renderCases(){
     const long=(c.detail||'').length>110||(c.detail||'').split('\n').length>3;
     return `<div class="cs ${c.done?'ok':''}">
       <div class="top"><span class="sv2">${esc(c.service)}</span><span class="wd">${esc(c.ward)}</span><span class="tm">${esc(c.time)} น.</span></div>
-      <div class="hn">HN <b>${esc(c.hn)}</b></div>
-      <div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
+      <div class="hn">HN <b>${esc(c.hn)}</b>${c.pname?` · <b>${esc(c.pname)}</b>`:''}</div>
+      ${c.detail?`<div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>`:''}${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
       <div class="st">${c.done
         ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>`
         :`<span class="badge p">⏳ รอดำเนินการ</span>${c.id?`<span class="acts"><button type="button" class="sign" data-id="${esc(c.id)}">✍️ ลงชื่อดำเนินการ</button><button type="button" class="del" data-id="${esc(c.id)}">🗑 ลบ</button></span>`:''}`}</div>
