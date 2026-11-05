@@ -144,10 +144,10 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 
 #camOv{position:fixed;inset:0;background:#000;z-index:9999;display:none;flex-direction:column}
 #camOv video{flex:1;min-height:0;width:100%;object-fit:cover}
-#camFrame{position:absolute;left:5%;right:5%;border:3px solid #4ade80;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.55);pointer-events:none}
+#camFrame{z-index:1;position:absolute;left:5%;right:5%;border:3px solid #4ade80;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.55);pointer-events:none}
 #camHint{position:absolute;left:0;right:0;color:#fff;text-align:center;font-weight:600;padding:0 16px;text-shadow:0 1px 4px #000}
 #camBar{display:flex;justify-content:space-between;align-items:center;padding:14px 22px calc(14px + env(safe-area-inset-bottom));background:#000}
-#camBar button{border:0;border-radius:99px;font:inherit;font-weight:600;padding:10px 16px;background:#333;color:#fff}
+#camBar{gap:8px}#camBar button{border:0;border-radius:99px;font:inherit;font-weight:600;padding:10px 16px;background:#333;color:#fff}
 #camShot{width:68px;height:68px;padding:0!important;background:#fff!important;border:5px solid #4ade80!important}
 </style>
 </head>
@@ -424,6 +424,16 @@ async function scanImage(file){
 /* ---------- กล้องพร้อมกรอบ label ---------- */
 let camStream=null;
 function camClose(){ if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;} $('camOv').style.display='none'; }
+
+async function camFocus(px,py){   // แตะเพื่อโฟกัส (ถ้ามือถือรองรับ)
+  const t=camStream&&camStream.getVideoTracks()[0]; if(!t) return;
+  const caps=(t.getCapabilities&&t.getCapabilities())||{};
+  try{ const adv={}; if(caps.focusMode&&caps.focusMode.includes('single-shot')) adv.focusMode='single-shot'; else if(caps.focusMode&&caps.focusMode.includes('continuous')) adv.focusMode='continuous';
+    if(px!=null) adv.pointsOfInterest=[{x:px,y:py}]; await t.applyConstraints({advanced:[adv]}); }catch(_){}
+}
+function camRing(x,y){ const r=document.createElement('div'); r.style.cssText='position:fixed;width:64px;height:64px;border:2px solid #fff;border-radius:50%;pointer-events:none;z-index:10001;left:'+(x-32)+'px;top:'+(y-32)+'px;transition:all .4s;opacity:1'; document.body.appendChild(r); setTimeout(()=>{r.style.transform='scale(.6)';r.style.opacity='0';},30); setTimeout(()=>r.remove(),500); }
+let camTorch=false;
+async function camToggleTorch(){ const t=camStream&&camStream.getVideoTracks()[0]; try{ camTorch=!camTorch; await t.applyConstraints({advanced:[{torch:camTorch}]}); $('camLight').style.background=camTorch?'#facc15':'#333'; $('camLight').style.color=camTorch?'#000':'#fff'; }catch(_){ camTorch=false; } }
 async function camOpen(){
   try{
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw 0;
@@ -439,6 +449,7 @@ function layoutFrame(){
 }
 async function camShot(){
   const v=$('camVid'), vw=v.videoWidth, vh=v.videoHeight; if(!vw) return;
+  await camFocus(.5,.5); await new Promise(r=>setTimeout(r,700));   // โฟกัสกลางภาพก่อนถ่าย
   if(window.ImageCapture&&camStream){   // ถ่ายภาพนิ่งความละเอียดเต็ม (โฟกัสคมกว่าเฟรมวิดีโอ) แล้วให้ระบบหาแผ่น label เอง
     try{ const blob=await new ImageCapture(camStream.getVideoTracks()[0]).takePhoto(); if(blob&&blob.size>20000){ camClose(); scanImage(new File([blob],'label.jpg',{type:blob.type||'image/jpeg'})); return; } }catch(_){}
   }
@@ -451,9 +462,9 @@ async function camShot(){
 }
 (function(){
   const o=document.createElement('div'); o.id='camOv';
-  o.innerHTML='<video id="camVid" playsinline muted></video><div id="camFrame"></div><div id="camHint">วาง label ให้พอดีกรอบเขียว<br>ถือแนวนอน ให้ตัวหนังสือตรง ไม่เอียง</div><div id="camBar"><button type="button" id="camCancel">ยกเลิก</button><button type="button" id="camShot" aria-label="ถ่าย"></button><button type="button" id="camNative">กล้องเครื่อง</button></div>';
+  o.innerHTML='<video id="camVid" playsinline muted></video><div id="camFrame"></div><div id="camHint">วาง label ให้พอดีกรอบเขียว<br>ถือห่าง ~20 ซม. แตะที่ตัวหนังสือเพื่อโฟกัส<br>ให้ตัวหนังสือตรง ไม่เอียง ไม่มีเงา</div><div id="camBar"><button type="button" id="camCancel">ยกเลิก</button><button type="button" id="camShot" aria-label="ถ่าย"></button><button type="button" id="camLight">💡</button><button type="button" id="camNative">กล้องเครื่อง</button></div>';
   document.body.appendChild(o);
-  $('camCancel').onclick=camClose; $('camShot').onclick=camShot;
+  $('camLight').onclick=camToggleTorch; $('camVid').addEventListener('click',e=>{camRing(e.clientX,e.clientY); const r=e.target.getBoundingClientRect(); camFocus((e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height);}); $('camCancel').onclick=camClose; $('camShot').onclick=camShot;
   $('camNative').onclick=()=>{ camClose(); $('inScanCam').click(); };
   window.addEventListener('resize',()=>{ if($('camOv').style.display==='flex') layoutFrame(); });
 })();
