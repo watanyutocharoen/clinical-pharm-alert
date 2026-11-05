@@ -135,6 +135,10 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .del.go{background:var(--danger);border-color:var(--danger);color:#fff}
 .acts{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}.acts .sign{margin-left:0}
 @media(max-width:420px){.acts{width:100%;margin-left:0}.acts .sign{flex:1;width:auto}.acts .del{flex:0 0 auto}}
+.scanbtn{width:100%;margin-top:8px;border:1.5px dashed var(--primary);background:var(--primary-l);color:var(--primary-d);border-radius:12px;padding:10px 12px;font:700 14px 'Sarabun',sans-serif;cursor:pointer}
+.scanbtn:disabled{opacity:.6}
+.scaninfo{margin-top:8px;font-size:13.5px;background:#fff8e6;border:1px solid #f1dca6;border-radius:10px;padding:8px 10px;color:#6b4e00}
+.scaninfo .chips{margin-top:6px}.scaninfo .chips button{border:1.5px solid var(--primary);background:#fff;color:var(--primary-d);border-radius:8px;padding:2px 9px;font:700 13px 'Sarabun',sans-serif;cursor:pointer}
 </style>
 </head>
 <body>
@@ -173,6 +177,9 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
   <div class="card" id="g-hn">
     <label class="t" for="hn">3. HN<span class="req">*</span></label>
     <input type="text" id="hn" inputmode="numeric" autocomplete="off" placeholder="เช่น 6612345">
+    <button type="button" class="scanbtn" id="btnScan">📷 ถ่ายรูป / เลือกรูป label หรือหน้าจอ เพื่ออ่าน HN + ชื่อ-สกุล</button>
+    <input type="file" id="inScan" accept="image/*" hidden>
+    <div id="scanInfo" class="scaninfo" style="display:none"></div>
     <div class="msg">กรุณากรอก HN</div>
   </div>
 
@@ -273,6 +280,97 @@ buildButtons('wards', WARDS, 'ward');
 buildButtons('services', SERVICES, 'service', 'long');
 $('maxN').textContent = CONFIG.MAX_PHOTOS;
 ['hn','pname','detail'].forEach(id=>$(id).addEventListener('input',e=>e.target.closest('.card').classList.remove('err')));
+
+/* ---------- อ่าน HN + ชื่อ-สกุล จากรูป (OCR ในเครื่อง ไม่ส่งรูปไปที่อื่น) ---------- */
+const OCR_JS='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const OCR_LANG='https://cdn.jsdelivr.net/npm/@tesseract.js-data/tha@1.0.0/4.0.0_best_int';
+let ocrWorkerP=null;
+function getOcrWorker(){
+  if(ocrWorkerP) return ocrWorkerP;
+  ocrWorkerP=(async()=>{
+    if(!window.Tesseract) await new Promise((res,rej)=>{const s=document.createElement('script'); s.src=OCR_JS; s.onload=res; s.onerror=()=>rej(new Error('โหลดตัวอ่านภาพไม่ได้ (ต้องมีเน็ต)')); document.head.appendChild(s);});
+    return await Tesseract.createWorker('tha',1,{langPath:OCR_LANG});
+  })().catch(e=>{ocrWorkerP=null; throw e;});
+  return ocrWorkerP;
+}
+function fileToImg(file){ return new Promise((res,rej)=>{ const u=URL.createObjectURL(file); const i=new Image(); i.onload=()=>res(i); i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('img'));}; i.src=u; }); }
+function prepCanvas(img,width,blur){
+  const s=width/img.naturalWidth, w=width, h=Math.round(img.naturalHeight*s);
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d');
+  x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(img,0,0,w,h);
+  const d=x.getImageData(0,0,w,h), p=d.data, g=new Uint8ClampedArray(w*h), hist=new Uint32Array(256);
+  for(let i=0,j=0;i<p.length;i+=4,j++){ const v=(p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)|0; g[j]=v; hist[v]++; }
+  const n=w*h; let a=0,lo=0,hi=255; for(;lo<255&&(a+=hist[lo])<n*0.01;lo++); a=0; for(;hi>0&&(a+=hist[hi])<n*0.01;hi--);
+  const rng=Math.max(1,hi-lo); let src=g;
+  if(blur){ const o=new Uint8ClampedArray(w*h); for(let y=1;y<h-1;y++)for(let xx=1;xx<w-1;xx++){ let sum=0; for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++) sum+=g[(y+dy)*w+xx+dx]; o[y*w+xx]=sum/9; } src=o; }
+  for(let i=0,j=0;i<p.length;i+=4,j++){ const v=Math.max(0,Math.min(255,((src[j]-lo)*255/rng)|0)); p[i]=p[i+1]=p[i+2]=v; p[i+3]=255; }
+  x.putImageData(d,0,0); return c;
+}
+const NAME_PREFIX='(?:นางสาว|นาย|นาง|น\\.ส\\.|นส\\.|เด็กชาย|เด็กหญิง|ด\\.ช\\.|ด\\.ญ\\.|ดช\\.|ดญ\\.)';
+const NAME_STOP=/วันเกิด|รับเกิด|เดือน|ไม่ทราบ|นพ|พญ|ทพ|room|alert|ชาย|หญิง|primary|ห้อง|แพทย์|โรงพยาบาล|อายุ/i;
+function parseOcr(text){
+  const lines=String(text).split('\n').map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
+  let name='', nameIdx=-1;
+  const re=new RegExp('('+NAME_PREFIX+')\\s*([ก-๙]{2,})\\s+([ก-๙]{2,})');
+  for(let i=0;i<lines.length;i++){ const m=lines[i].match(re); if(m){ name=m[1]+' '+m[2]+' '+m[3]; nameIdx=i; break; } }
+  if(!name){
+    for(let i=0;i<lines.length;i++){
+      const l=lines[i]; if(NAME_STOP.test(l)) continue;
+      let t=l.split(' ').filter(w=>/^[ก-๙]+$/.test(w));
+      if(t.length&&t[0].length===1) t=t.slice(1);
+      if(t.length>=2&&t.length<=3&&t.every(w=>w.length>=2)){ name=t.join(' '); nameIdx=i; break; }
+    }
+  }
+  const hn={};
+  lines.forEach((l,i)=>{
+    const labeled=/(h\s*\.?\s*n|ห\s*\.?\s*[ผพฟน]|เอช)/i.test(l);
+    (l.match(/(?<![\d\/])\d{6,9}(?![\d\/])/g)||[]).forEach(m=>{
+      if(/(\d)\1{4,}/.test(m)||new Set(m).size<4) return;          // ขยะจากลายจอ เช่น 333333510
+      let s=1+(labeled?5:0)+(m.length===9?2:0)+(nameIdx>=0&&Math.abs(i-nameIdx)<=2?3:0);
+      hn[m]=(hn[m]||0)+s;
+    });
+  });
+  const longs=[]; lines.forEach(l=>(l.match(/\d{10,}/g)||[]).forEach(m=>longs.push(m)));   // เลข 10 หลักขึ้นไป เช่น VN
+  return {hn,longs,name};
+}
+function rankHn(scores,longs){
+  const m={...scores};
+  Object.keys(m).forEach(k=>{ if(longs.some(L=>L.includes(k))) delete m[k]; });   // ชิ้นส่วนของเลข VN
+  const keys=Object.keys(m);
+  keys.forEach(x=>keys.forEach(y=>{ if(x!==y&&m[x]!==undefined&&m[y]!==undefined&&y.length>x.length&&y.endsWith(x)){ m[y]+=m[x]; delete m[x]; } }));   // อ่านขาดหลักหน้า -> รวมกับตัวเต็ม
+  return Object.keys(m).sort((a,b)=>m[b]-m[a]);
+}
+async function scanImage(file){
+  const info=$('scanInfo'), btn=$('btnScan'); const old=btn.textContent;
+  btn.disabled=true; info.style.display='block'; info.textContent='กำลังอ่านรูป… (ครั้งแรกอาจช้า ต้องโหลดตัวอ่านภาพ)';
+  try{
+    let img; try{ img=await fileToImg(file); }catch(_){ img=await fileToImg(await heicToJpeg(file)); }
+    const worker=await getOcrWorker();
+    const passes=[[900,true,'11'],[900,true,'6'],[700,false,'11']];
+    let best={hn:[],name:''}; const score={}, longs=[];
+    for(const [w,bl,psm] of passes){
+      btn.textContent='กำลังอ่านรูป…';
+      await worker.setParameters({tessedit_pageseg_mode:psm});
+      const r=await worker.recognize(prepCanvas(img,w,bl));
+      const p=parseOcr(r.data.text);
+      Object.keys(p.hn).forEach(k=>{ score[k]=(score[k]||0)+p.hn[k]; }); longs.push(...p.longs); best.hn=rankHn(score,longs);
+      if(!best.name&&p.name) best.name=p.name;
+      if(best.hn.some(x=>x.length===9||x.length===7)&&best.name&&/^(นาย|นาง|น\.|เด็ก|ด\.|ดช|ดญ)/.test(best.name)) break;
+    }
+    if(!best.hn.length&&!best.name){ info.textContent='อ่านไม่ออก ลองถ่ายใหม่ให้ชัดและเห็นเฉพาะส่วนชื่อ/HN หรือพิมพ์เอง'; return; }
+    if(best.hn[0]){ $('hn').value=best.hn[0]; $('g-hn').classList.remove('err'); }
+    if(best.name){ $('pname').value=best.name; $('g-pname').classList.remove('err'); }
+    info.innerHTML='';
+    const t=document.createElement('div'); t.textContent='⚠️ อ่านจากรูป กรุณาตรวจทาน HN และชื่อ-สกุลให้ถูกต้องก่อนส่ง'; info.appendChild(t);
+    if(best.hn.length>1){ const d=document.createElement('div'); d.className='chips'; d.append('เลขอื่นที่อ่านได้: ');
+      best.hn.slice(1,4).forEach(x=>{ const b=document.createElement('button'); b.type='button'; b.textContent=x; b.onclick=()=>{$('hn').value=x;}; d.appendChild(b); }); info.appendChild(d); }
+    if(!best.hn[0]){ const d=document.createElement('div'); d.textContent='ไม่พบเลข HN ในรูป กรุณาพิมพ์เอง'; info.appendChild(d); }
+    if(!best.name){ const d=document.createElement('div'); d.textContent='ไม่พบชื่อ-สกุลในรูป กรุณาพิมพ์เอง'; info.appendChild(d); }
+  }catch(e){ info.textContent='อ่านรูปไม่ได้: '+(e.message||e)+' · พิมพ์เองได้เลย'; }
+  finally{ btn.disabled=false; btn.textContent=old; $('inScan').value=''; }
+}
+$('btnScan').onclick=()=>$('inScan').click();
+$('inScan').onchange=e=>{ const f=e.target.files[0]; if(f) scanImage(f); };
 
 /* ---------- รูป ---------- */
 $('btnCam').onclick = ()=>$('inCam').click();
