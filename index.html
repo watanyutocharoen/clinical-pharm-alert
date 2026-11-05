@@ -147,7 +147,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 #camFrame{z-index:1;position:absolute;left:5%;right:5%;border:3px solid #4ade80;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.55);pointer-events:none}
 #camHint{position:absolute;left:0;right:0;color:#fff;text-align:center;font-weight:600;padding:0 16px;text-shadow:0 1px 4px #000}
 #camBar{display:flex;justify-content:space-between;align-items:center;padding:14px 22px calc(14px + env(safe-area-inset-bottom));background:#000}
-#camBar{gap:8px}#camBar button{border:0;border-radius:99px;font:inherit;font-weight:600;padding:10px 16px;background:#333;color:#fff}
+#camBar{gap:8px}#camBar button{white-space:nowrap}#camHint{font-size:14px;z-index:2}#camBar button{border:0;border-radius:99px;font:inherit;font-weight:600;padding:10px 16px;background:#333;color:#fff}
 #camShot{width:68px;height:68px;padding:0!important;background:#fff!important;border:5px solid #4ade80!important}
 </style>
 </head>
@@ -448,16 +448,17 @@ async function camOpen(){
   const v=$('camVid'); v.srcObject=camStream; await v.play().catch(()=>{});
   $('camOv').style.display='flex'; layoutFrame();
 }
-function layoutFrame(){
-  const v=$('camVid'), f=$('camFrame'), r=v.getBoundingClientRect(), w=r.width*.9, h=Math.min(w/2.2,r.height*.6);
-  f.style.height=h+'px'; f.style.top=(r.top+(r.height-h)/2)+'px'; $('camHint').style.top=(r.top+(r.height-h)/2-52)+'px';
+function layoutFrame(){   // กรอบเล็กลง ให้ label พอดีเมื่อถือห่างราว 10 ซม.
+  const v=$('camVid'), f=$('camFrame'), r=v.getBoundingClientRect(), w=Math.min(r.width*.5,320), h=w/2.3, top=r.top+(r.height-h)/2;
+  f.style.width=w+'px'; f.style.height=h+'px'; f.style.left=(r.left+(r.width-w)/2)+'px'; f.style.right='auto'; f.style.top=top+'px';
+  $('camHint').style.top=(top-62)+'px';
 }
 async function camShot(){
   const v=$('camVid'), vw=v.videoWidth, vh=v.videoHeight; if(!vw) return;
   await new Promise(r=>setTimeout(r,250));
   const r=v.getBoundingClientRect(), k=Math.max(r.width/vw,r.height/vh);      // object-fit: cover
   const ox=(vw*k-r.width)/2, oy=(vh*k-r.height)/2, f=$('camFrame').getBoundingClientRect();
-  const m=.06, fx=f.left-r.left, fy=f.top-r.top, mx=f.width*m, my=f.height*m;
+  const m=.12, fx=f.left-r.left, fy=f.top-r.top, mx=f.width*m, my=f.height*m;
   const sx=Math.max(0,(fx-mx+ox)/k), sy=Math.max(0,(fy-my+oy)/k), sw=Math.min(vw-sx,(f.width+2*mx)/k), sh=Math.min(vh-sy,(f.height+2*my)/k);
   const c=document.createElement('canvas'); c.width=sw; c.height=sh; c.getContext('2d').drawImage(v,sx,sy,sw,sh,0,0,sw,sh);   // ภาพในกรอบเขียว (ตรงกับที่เห็น)
   const frameBlob=await new Promise(res=>c.toBlob(res,'image/jpeg',.95)); const frameFile=frameBlob&&new File([frameBlob],'label.jpg',{type:'image/jpeg'});
@@ -470,7 +471,7 @@ async function camShot(){
 }
 (function(){
   const o=document.createElement('div'); o.id='camOv';
-  o.innerHTML='<video id="camVid" playsinline muted></video><div id="camFrame"></div><div id="camHint">วาง label ให้พอดีกรอบเขียว<br>แตะที่ตัวหนังสือเพื่อโฟกัส รอให้คมแล้วค่อยกดถ่าย<br>ให้ตัวหนังสือตรง ไม่เอียง ไม่มีเงา</div><div id="camBar"><button type="button" id="camCancel">ยกเลิก</button><button type="button" id="camShot" aria-label="ถ่าย"></button><button type="button" id="camLight">💡</button><button type="button" id="camNative">กล้องเครื่อง</button></div>';
+  o.innerHTML='<video id="camVid" playsinline muted></video><div id="camFrame"></div><div id="camHint">วาง label ให้พอดีกรอบ ตัวหนังสือตรง<br>แตะที่ตัวหนังสือเพื่อโฟกัส รอให้คมแล้วกดถ่าย</div><div id="camBar"><button type="button" id="camCancel">ยกเลิก</button><button type="button" id="camShot" aria-label="ถ่าย"></button><button type="button" id="camLight">💡</button><button type="button" id="camNative">กล้องเครื่อง</button></div>';
   document.body.appendChild(o);
   $('camLight').onclick=camToggleTorch; $('camVid').addEventListener('click',e=>{camRing(e.clientX,e.clientY); const r=e.target.getBoundingClientRect(); camFocus((e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height);}); $('camCancel').onclick=camClose; $('camShot').onclick=camShot;
   $('camNative').onclick=()=>{ camClose(); $('inScanCam').click(); };
