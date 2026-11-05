@@ -381,7 +381,7 @@ function cropLabel(img){   // หาแผ่น label สีขาวในภ�
     const o=document.createElement('canvas'); o.width=sw; o.height=sh; o.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,sw,sh); return o;
   }catch(_){return null;}
 }
-async function scanImage(file){
+async function scanImage(file,fallback){
   const info=$('scanInfo'), btns=[$('btnScanCam'),$('btnScanFile')];
   btns.forEach(b=>b.disabled=true); info.style.display='block'; info.textContent='กำลังอ่านรูป… (ครั้งแรกอาจช้า ต้องโหลดตัวอ่านภาพ)';
   try{
@@ -408,10 +408,12 @@ async function scanImage(file){
         if(p.name&&PFX.test(p.name)){ return await scanImage(f2); }
       }
     }
+    if(fallback&&!(best.hn.length&&best.name&&PFX.test(best.name))){ return await scanImage(fallback); }   // ภาพนิ่งอ่านไม่ดี -> ลองภาพในกรอบ
     if(!best.hn.length&&!best.name){ info.textContent='อ่านไม่ออก ลองถ่ายใหม่ให้ชัดและเห็นเฉพาะส่วนชื่อ/HN หรือพิมพ์เอง'; return; }
     if(best.hn[0]){ $('hn').value=best.hn[0]; $('g-hn').classList.remove('err'); }
     if(best.name){ $('pname').value=best.name; $('g-pname').classList.remove('err'); }
     info.innerHTML='';
+    try{ const im=document.createElement('img'); im.src=URL.createObjectURL(file); im.style.cssText='display:block;max-width:100%;max-height:90px;border-radius:6px;margin-bottom:6px'; info.appendChild(im); }catch(_){}
     const t=document.createElement('div'); t.textContent='⚠️ อ่านจากรูป กรุณาตรวจทาน HN และชื่อ-สกุลให้ถูกต้องก่อนส่ง'; info.appendChild(t);
     if(best.hn.length>1){ const d=document.createElement('div'); d.className='chips'; d.append('เลขอื่นที่อ่านได้: ');
       best.hn.slice(1,4).forEach(x=>{ const b=document.createElement('button'); b.type='button'; b.textContent=x; b.onclick=()=>{$('hn').value=x;}; d.appendChild(b); }); info.appendChild(d); }
@@ -449,20 +451,23 @@ function layoutFrame(){
 }
 async function camShot(){
   const v=$('camVid'), vw=v.videoWidth, vh=v.videoHeight; if(!vw) return;
-  await camFocus(.5,.5); await new Promise(r=>setTimeout(r,700));   // โฟกัสกลางภาพก่อนถ่าย
-  if(window.ImageCapture&&camStream){   // ถ่ายภาพนิ่งความละเอียดเต็ม (โฟกัสคมกว่าเฟรมวิดีโอ) แล้วให้ระบบหาแผ่น label เอง
-    try{ const blob=await new ImageCapture(camStream.getVideoTracks()[0]).takePhoto(); if(blob&&blob.size>20000){ camClose(); scanImage(new File([blob],'label.jpg',{type:blob.type||'image/jpeg'})); return; } }catch(_){}
-  }
+  await new Promise(r=>setTimeout(r,250));
   const r=v.getBoundingClientRect(), k=Math.max(r.width/vw,r.height/vh);      // object-fit: cover
   const ox=(vw*k-r.width)/2, oy=(vh*k-r.height)/2, f=$('camFrame').getBoundingClientRect();
   const m=.06, fx=f.left-r.left, fy=f.top-r.top, mx=f.width*m, my=f.height*m;
   const sx=Math.max(0,(fx-mx+ox)/k), sy=Math.max(0,(fy-my+oy)/k), sw=Math.min(vw-sx,(f.width+2*mx)/k), sh=Math.min(vh-sy,(f.height+2*my)/k);
-  const c=document.createElement('canvas'); c.width=sw; c.height=sh; c.getContext('2d').drawImage(v,sx,sy,sw,sh,0,0,sw,sh);
-  camClose(); c.toBlob(b=>{ if(b) scanImage(new File([b],'label.jpg',{type:'image/jpeg'})); },'image/jpeg',.95);
+  const c=document.createElement('canvas'); c.width=sw; c.height=sh; c.getContext('2d').drawImage(v,sx,sy,sw,sh,0,0,sw,sh);   // ภาพในกรอบเขียว (ตรงกับที่เห็น)
+  const frameBlob=await new Promise(res=>c.toBlob(res,'image/jpeg',.95)); const frameFile=frameBlob&&new File([frameBlob],'label.jpg',{type:'image/jpeg'});
+  let photo=null;
+  if(window.ImageCapture&&camStream){   // ภาพนิ่งความละเอียดเต็ม (ถ้ารองรับ)
+    try{ const blob=await new ImageCapture(camStream.getVideoTracks()[0]).takePhoto(); if(blob&&blob.size>20000) photo=new File([blob],'photo.jpg',{type:blob.type||'image/jpeg'}); }catch(_){}
+  }
+  camClose();
+  if(photo&&frameFile) scanImage(photo,frameFile); else scanImage(frameFile||photo);
 }
 (function(){
   const o=document.createElement('div'); o.id='camOv';
-  o.innerHTML='<video id="camVid" playsinline muted></video><div id="camFrame"></div><div id="camHint">วาง label ให้พอดีกรอบเขียว<br>ถือห่าง ~20 ซม. แตะที่ตัวหนังสือเพื่อโฟกัส<br>ให้ตัวหนังสือตรง ไม่เอียง ไม่มีเงา</div><div id="camBar"><button type="button" id="camCancel">ยกเลิก</button><button type="button" id="camShot" aria-label="ถ่าย"></button><button type="button" id="camLight">💡</button><button type="button" id="camNative">กล้องเครื่อง</button></div>';
+  o.innerHTML='<video id="camVid" playsinline muted></video><div id="camFrame"></div><div id="camHint">วาง label ให้พอดีกรอบเขียว<br>แตะที่ตัวหนังสือเพื่อโฟกัส รอให้คมแล้วค่อยกดถ่าย<br>ให้ตัวหนังสือตรง ไม่เอียง ไม่มีเงา</div><div id="camBar"><button type="button" id="camCancel">ยกเลิก</button><button type="button" id="camShot" aria-label="ถ่าย"></button><button type="button" id="camLight">💡</button><button type="button" id="camNative">กล้องเครื่อง</button></div>';
   document.body.appendChild(o);
   $('camLight').onclick=camToggleTorch; $('camVid').addEventListener('click',e=>{camRing(e.clientX,e.clientY); const r=e.target.getBoundingClientRect(); camFocus((e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height);}); $('camCancel').onclick=camClose; $('camShot').onclick=camShot;
   $('camNative').onclick=()=>{ camClose(); $('inScanCam').click(); };
