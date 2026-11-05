@@ -391,17 +391,33 @@ async function scanImage(file,fallback){
     let img; try{ img=await fileToImg(file); }catch(_){ img=await fileToImg(await heicToJpeg(file)); }
     const worker=await getOcrWorker();
     const crop=cropLabel(img);
-    const passes=(crop?[[1400,true,'11',crop],[1400,true,'6',crop]]:[]).concat([[1400,true,'11'],[1800,true,'6'],[900,true,'11']]);
-    let best={hn:[],name:''}; const score={}, longs=[];
+    const passes=(crop?[[1400,false,'11',crop],[1400,true,'11',crop],[2000,false,'6',crop]]:[]).concat([[1400,false,'11'],[1400,true,'11'],[1800,true,'6'],[900,true,'11']]);
+    let best={hn:[],name:''}; const votes={}; const strips=[]; const score={}, longs=[];
     let pi=0;
     for(const [w,bl,psm,src] of passes){ pi++;
       await worker.setParameters({tessedit_pageseg_mode:psm});
-      const r=await worker.recognize(prepCanvas(src||img,w,bl));
+      const pc=prepCanvas(src||img,w,bl), r=await worker.recognize(pc);
       const p=parseOcr(r.data.text);
+      if(p.name&&strips.length<2) strips.push({pc,lines:r.data.lines||[],name:p.name});
       Object.keys(p.hn).forEach(k=>{ score[k]=(score[k]||0)+p.hn[k]; }); longs.push(...p.longs); best.hn=rankHn(score,longs);
-      if(p.name&&(!best.name||(!PFX.test(best.name)&&PFX.test(p.name)))) best.name=p.name;
+      if(p.name){ votes[p.name]=(votes[p.name]||0)+1; const cand=Object.keys(votes).sort((a,b)=>(PFX.test(b)-PFX.test(a))||(votes[b]-votes[a])||(b.length-a.length)); best.name=cand[0]; }
       if(pi>=(crop?2:2)&&best.hn.some(x=>x.length>=8)&&best.name&&PFX.test(best.name)) break;
     }
+    for(const st of strips){   // อ่านซ้ำเฉพาะบรรทัดชื่อ ขยาย 3 เท่า (แม่นกว่าอ่านทั้งภาพ)
+      try{
+        const key=st.name.split(' ').filter(t=>!PFX.test(t)).sort((a,b)=>b.length-a.length)[0]||'';
+        const ln=st.lines.find(l=>!/\d/.test(l.text)&&key&&l.text.includes(key.slice(0,3)))||st.lines.find(l=>!/\d/.test(l.text)&&new RegExp(NAME_PREFIX).test(l.text.replace(/\s/g,'')));
+        if(!ln) continue; const b=ln.bbox, pad=Math.round((b.y1-b.y0)*.35), sc=3, W=b.x1-b.x0+pad*2, H=b.y1-b.y0+pad*2;
+        const o=document.createElement('canvas'); o.width=W*sc; o.height=H*sc; const x=o.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,o.width,o.height); x.imageSmoothingQuality='high'; x.drawImage(st.pc,b.x0-pad,b.y0-pad,W,H,0,0,o.width,o.height);
+        for(const m2 of ['13','7']){
+          await worker.setParameters({tessedit_pageseg_mode:m2});
+          const t=(await worker.recognize(o)).data.text.replace(/[^ก-๙\.\s]/g,' ').replace(/\s+/g,' ').trim().replace(/\.$/,'');
+          const mm=t.match(new RegExp('('+NAME_PREFIX+')\\s*([ก-๙]{2,})\\s+([ก-๙]{2,})'));
+          if(mm){ const nm=mm[1]+' '+mm[2]+' '+mm[3]; votes[nm]=(votes[nm]||0)+1.5; }
+        }
+      }catch(_){}
+    }
+    if(strips.length){ const cand=Object.keys(votes).sort((a,b)=>(PFX.test(b)-PFX.test(a))||(votes[b]-votes[a])||(b.length-a.length)); best.name=cand[0]; }
     if(!(best.name&&PFX.test(best.name))&&!file._rot){   // ถ่ายผิดทิศ -> ลองหมุน
       for(const a of [90,270]){
         const c=document.createElement('canvas'), W=img.naturalWidth||img.width, H=img.naturalHeight||img.height; c.width=H; c.height=W; const x=c.getContext('2d');
