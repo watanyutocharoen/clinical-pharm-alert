@@ -151,7 +151,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 <div class="wrap tabs" id="tabs"><button type="button" id="tabForm" class="on">แจ้งเคส</button><button type="button" id="tabDash">📊 Dashboard</button></div>
 
 <main class="wrap" id="dashView" style="display:none">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><b>จำนวนเคสที่แจ้ง</b><button type="button" class="rbtn" id="dRefresh">↻ รีเฟรช</button></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><b>จำนวนเคสที่แจ้ง</b><span style="display:flex;gap:6px"><button type="button" class="rbtn" id="dReport">📥 รายงาน Excel</button><button type="button" class="rbtn" id="dRefresh">↻ รีเฟรช</button></span></div>
   <div id="dBody"><div class="dmsg">กำลังโหลด…</div></div>
 </main>
 
@@ -368,12 +368,14 @@ async function init(){
     state.demo=true;
     $('who').textContent='โหมดทดสอบ (ยังไม่ได้ตั้งค่า LIFF_ID)';
     const c0=getCaseId(); if(c0) showAck(c0);
+    if(isReportMode()) afterInitReport();
     return;
   }
   try{
     await liff.init({liffId:CONFIG.LIFF_ID});
-    if(!liff.isLoggedIn()){ liff.login({redirectUri:location.href}); return; }
+    if(!liff.isLoggedIn()){ if(isReportMode()){ afterInitReport(); return; } liff.login({redirectUri:location.href}); return; }
     state.profile = await liff.getProfile();
+    if(isReportMode()){ afterInitReport(); return; }
   }catch(e){
     console.error(e);
     toast('เชื่อมต่อ LINE ไม่สำเร็จ: '+(e.message||e));
@@ -707,6 +709,79 @@ function svcBreak(rows){
     return `<div class="sv"><div class="l"><span>${esc(k)}</span><b>${bySvc[k].length}</b></div><div class="t"><div style="width:${bySvc[k].length/mx*100}%"></div></div><div class="chips">${wk.map(x=>`<span>${esc(x)} <b>×${w[x]}</b></span>`).join('')}</div></div>`;
   }).join('');
 }
+
+/* ---------- รายงาน Excel ---------- */
+function isReportMode(){ return new URLSearchParams(location.search).get('report')==='1'; }
+function afterInitReport(){ setTab('dash'); setTimeout(makeReport,300); }
+let exceljsP=null;
+function loadExcelJS(){
+  if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if(exceljsP) return exceljsP;
+  exceljsP=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload=()=>res(window.ExcelJS); s.onerror=()=>{exceljsP=null;rej(new Error('โหลดตัวสร้าง Excel ไม่ได้'));};
+    document.head.appendChild(s);
+  });
+  return exceljsP;
+}
+function dateRange(a,b){ const out=[]; for(let d=a; d<=b; d=addDays(d,1)) out.push(d); return out; }
+function monthRange(a,b){ const out=[]; let [y,m]=a.split('-').map(Number); const [y2,m2]=b.split('-').map(Number);
+  while(y<y2||(y===y2&&m<=m2)){ out.push(y+'-'+String(m).padStart(2,'0')); m++; if(m>12){m=1;y++;} } return out; }
+async function makeReport(){
+  // ในแอปไลน์ดาวน์โหลดไฟล์มักไม่ได้ -> เปิดในเบราว์เซอร์ภายนอกแล้วสร้างไฟล์ที่นั่น
+  try{
+    if(!isReportMode() && typeof liff!=='undefined' && liff.isInClient && liff.isInClient()){
+      liff.openWindow({url:location.origin+location.pathname+'?report=1',external:true}); return;
+    }
+  }catch(_){}
+  const btn=$('dReport'); const old=btn.textContent; btn.disabled=true; btn.textContent='กำลังสร้างรายงาน…';
+  try{
+    const [ex,resp]=await Promise.all([loadExcelJS(),fetch(CONFIG.GAS_URL+'?action=all').then(r=>r.json())]);
+    if(!resp.ok||!resp.cases) throw new Error('โหลดข้อมูลไม่ได้');
+    const cases=resp.cases.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+    const today=bkkToday();
+    const first=cases.length?cases[0].date:today, lastD=today>(cases.length?cases[cases.length-1].date:today)?today:cases[cases.length-1].date;
+    const wb=new ex.Workbook(); wb.creator='Clinical Pharmacist IPD'; wb.created=new Date();
+    const HEAD='FF0F7B6C';
+    const styleHead=(row)=>{ row.eachCell(c=>{ c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Sarabun'}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:HEAD}}; c.alignment={vertical:'middle',horizontal:'center',wrapText:true}; c.border={bottom:{style:'thin',color:{argb:'FF999999'}}}; }); row.height=30; };
+    const svcList=[...SERVICES]; cases.forEach(c=>{ if(!svcList.includes(c.service)) svcList.push(c.service); });
+    const cols=(first)=>[{header:first,key:'k',width:16},...svcList.map((s,i)=>({header:s,key:'s'+i,width:18})),{header:'รวม',key:'t',width:9},{header:'ดำเนินการแล้ว',key:'d',width:14},{header:'รอดำเนินการ',key:'p',width:14}];
+    function matrix(name,firstHead,keys,keyFn,labelFn){
+      const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:1}]});
+      ws.columns=cols(firstHead); styleHead(ws.getRow(1));
+      const tot={t:0,d:0,p:0}; svcList.forEach((_,i)=>tot['s'+i]=0);
+      keys.forEach(k=>{
+        const rs=cases.filter(c=>keyFn(c)===k); const row={k:labelFn(k)};
+        svcList.forEach((s,i)=>{ row['s'+i]=rs.filter(c=>c.service===s).length; tot['s'+i]+=row['s'+i]; });
+        row.t=rs.length; row.d=rs.filter(c=>c.done).length; row.p=row.t-row.d; tot.t+=row.t; tot.d+=row.d; tot.p+=row.p;
+        const r=ws.addRow(row); r.eachCell((c,n)=>{ c.alignment={horizontal:n===1?'left':'center'}; if(n>1&&c.value===0) c.font={color:{argb:'FFBBBBBB'}}; });
+      });
+      const tr=ws.addRow({k:'รวมทั้งหมด',...tot}); tr.eachCell((c,n)=>{ c.font={bold:true}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE3F4F1'}}; c.alignment={horizontal:n===1?'left':'center'}; });
+      return ws;
+    }
+    const fmtD=d=>{ const [y,m,dd]=d.split('-').map(Number); return `${dd}/${m}/${y+543}`; };
+    const fmtM=m=>{ const [y,mm]=m.split('-').map(Number); return `${TH_M[mm-1]} ${y+543}`; };
+    matrix('รายวัน','วันที่',dateRange(first,lastD).reverse(),c=>c.date,fmtD);
+    matrix('รายเดือน','เดือน',monthRange(first.slice(0,7),lastD.slice(0,7)).reverse(),c=>c.date.slice(0,7),fmtM);
+    const ws=wb.addWorksheet('ข้อมูลดิบ',{views:[{state:'frozen',ySplit:1}]});
+    ws.columns=[{header:'วันที่',key:'date',width:12},{header:'เวลา',key:'time',width:8},{header:'วอร์ด',key:'ward',width:9},{header:'Service',key:'service',width:26},{header:'HN',key:'hn',width:13},{header:'รายละเอียด',key:'detail',width:60},{header:'สถานะ',key:'st',width:16},{header:'เภสัชกรผู้ดำเนินการ',key:'ph',width:30},{header:'เวลาดำเนินการ',key:'da',width:17}];
+    styleHead(ws.getRow(1));
+    cases.forEach(c=>{ const r=ws.addRow({date:fmtD(c.date),time:c.time,ward:c.ward,service:c.service,hn:String(c.hn),detail:c.detail,st:c.done?'ดำเนินการแล้ว':'รอดำเนินการ',ph:c.pharmacist,da:c.doneAt?(fmtD(c.doneAt.slice(0,10))+' '+c.doneAt.slice(11)):''});
+      r.getCell('hn').numFmt='@'; r.getCell('detail').alignment={wrapText:true,vertical:'top'};
+      r.getCell('st').font={color:{argb:c.done?'FF0B5F53':'FFB26A00'},bold:true}; });
+    ws.autoFilter={from:'A1',to:'I1'};
+    ws.eachRow(r=>{ r.eachCell(c=>{ c.font={name:'Sarabun',...(c.font||{})}; }); });
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ClinicalPharmacistIPD_report_'+today+'.xlsx';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),20000);
+    toast('สร้างรายงานแล้ว ('+cases.length+' เคส)');
+  }catch(e){ toast('สร้างรายงานไม่ได้: '+(e.message||e)); }
+  finally{ btn.disabled=false; btn.textContent=old; }
+}
+$('dReport').onclick=makeReport;
+
 /* ---------- รายการเคสรายวัน ---------- */
 async function loadDayCases(d,force){
   if(!force && dash.days[d]){ renderCases(); return; }
