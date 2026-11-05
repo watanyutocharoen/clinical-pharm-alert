@@ -338,7 +338,7 @@ function parseOcr(text){
   }
   if(!name){
     for(let i=0;i<lines.length;i++){
-      const l=lines[i]; if(NAME_STOP.test(l)) continue;
+      const l=lines[i]; if(NAME_STOP.test(l)||/[\d:]|H\.?N|V\.?N/i.test(l)) continue;   // ชื่อไม่มีตัวเลข (กันบรรทัดแพทย์/เลขห้อง)
       let t=l.split(' ').filter(w=>/^[ก-๙]+$/.test(w));
       if(t.length&&t[0].length===1) t=t.slice(1);
       if(t.length>=2&&t.length<=3&&t.every(w=>w.length>=2)){ name=t.join(' '); nameIdx=i; break; }
@@ -427,8 +427,9 @@ function camClose(){ if(camStream){camStream.getTracks().forEach(t=>t.stop());ca
 async function camOpen(){
   try{
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw 0;
-    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}},audio:false});
   }catch(_){ $('inScanCam').click(); return; }   // ใช้กล้องเครื่องแทน
+  try{ await camStream.getVideoTracks()[0].applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch(_){}
   const v=$('camVid'); v.srcObject=camStream; await v.play().catch(()=>{});
   $('camOv').style.display='flex'; layoutFrame();
 }
@@ -436,8 +437,11 @@ function layoutFrame(){
   const v=$('camVid'), f=$('camFrame'), r=v.getBoundingClientRect(), w=r.width*.9, h=Math.min(w/2.2,r.height*.6);
   f.style.height=h+'px'; f.style.top=(r.top+(r.height-h)/2)+'px'; $('camHint').style.top=(r.top+(r.height-h)/2-52)+'px';
 }
-function camShot(){
+async function camShot(){
   const v=$('camVid'), vw=v.videoWidth, vh=v.videoHeight; if(!vw) return;
+  if(window.ImageCapture&&camStream){   // ถ่ายภาพนิ่งความละเอียดเต็ม (โฟกัสคมกว่าเฟรมวิดีโอ) แล้วให้ระบบหาแผ่น label เอง
+    try{ const blob=await new ImageCapture(camStream.getVideoTracks()[0]).takePhoto(); if(blob&&blob.size>20000){ camClose(); scanImage(new File([blob],'label.jpg',{type:blob.type||'image/jpeg'})); return; } }catch(_){}
+  }
   const r=v.getBoundingClientRect(), k=Math.max(r.width/vw,r.height/vh);      // object-fit: cover
   const ox=(vw*k-r.width)/2, oy=(vh*k-r.height)/2, f=$('camFrame').getBoundingClientRect();
   const m=.06, fx=f.left-r.left, fy=f.top-r.top, mx=f.width*m, my=f.height*m;
