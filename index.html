@@ -311,12 +311,22 @@ function prepCanvas(img,width,blur){
   x.putImageData(d,0,0); return c;
 }
 const NAME_PREFIX='(?:นางสาว|นาย|นาง|น\\.ส\\.|นส\\.|เด็กชาย|เด็กหญิง|ด\\.ช\\.|ด\\.ญ\\.|ดช\\.|ดญ\\.)';
-const NAME_STOP=/วันเกิด|รับเกิด|เดือน|ไม่ทราบ|นพ|พญ|ทพ|room|alert|ชาย|หญิง|primary|ห้อง|แพทย์|โรงพยาบาล|อายุ/i;
+const NAME_STOP=/วันเกิด|รับเกิด|เดือน|ไม่ทราบ|นพ|พญ|ทพ|room|alert|ชาย|หญิง|primary|ห้อง|แพทย์|โรงพยาบาล|อายุ|โรง|พยาบาล|แอร์|จุฬา|อันตราย|ตามแพทย์/i;
 function parseOcr(text){
   const lines=String(text).split('\n').map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
   let name='', nameIdx=-1;
   const re=new RegExp('('+NAME_PREFIX+')\\s*([ก-๙]{2,})\\s+([ก-๙]{2,})');
   for(let i=0;i<lines.length;i++){ const m=lines[i].match(re); if(m){ name=m[1]+' '+m[2]+' '+m[3]; nameIdx=i; break; } }
+  if(!name){   // ชื่ออยู่บรรทัดเหนือ "วันเกิด/วันที่" เสมอ
+    const dob=lines.findIndex(l=>/เกิด|\d{1,2}\/\d{1,2}\/\d{4}/.test(l));
+    for(let i=dob-1;i>=0&&i>=dob-2;i--){
+      if(NAME_STOP.test(lines[i])) continue;
+      let t=lines[i].split(' ').map(w=>w.replace(/[^ก-๙]/g,'')).filter(Boolean);
+      if(t.length>=3&&t[0].length<=4&&!new RegExp('^'+NAME_PREFIX+'$').test(t[0])) t=t.slice(1);
+      else if(t.length===3&&t[0].length===1) t=t.slice(1);
+      if(t.length>=2&&t.length<=3&&t.every(w=>w.length>=2)){ name=t.join(' '); nameIdx=i; break; }
+    }
+  }
   if(!name){
     for(let i=0;i<lines.length;i++){
       const l=lines[i]; if(NAME_STOP.test(l)) continue;
@@ -327,6 +337,7 @@ function parseOcr(text){
   }
   const hn={};
   lines.forEach((l,i)=>{
+    if(l.length>60) return;   // บรรทัดยาวผิดปกติ = ขยะจากลายจอ
     const labeled=/(h\s*\.?\s*n|ห\s*\.?\s*[ผพฟน]|เอช)/i.test(l);
     (l.match(/(?<![\d\/])\d{6,9}(?![\d\/])/g)||[]).forEach(m=>{
       if(/(\d)\1{4,}/.test(m)||new Set(m).size<4) return;          // ขยะจากลายจอ เช่น 333333510
@@ -342,7 +353,9 @@ function rankHn(scores,longs){
   Object.keys(m).forEach(k=>{ if(longs.some(L=>L.includes(k))) delete m[k]; });   // ชิ้นส่วนของเลข VN
   const keys=Object.keys(m);
   keys.forEach(x=>keys.forEach(y=>{ if(x!==y&&m[x]!==undefined&&m[y]!==undefined&&y.length>x.length&&y.endsWith(x)){ m[y]+=m[x]; delete m[x]; } }));   // อ่านขาดหลักหน้า -> รวมกับตัวเต็ม
-  return Object.keys(m).sort((a,b)=>m[b]-m[a]);
+  const r=Object.keys(m).sort((a,b)=>m[b]-m[a]);
+  r.slice().forEach(x=>{ if(x.length===9&&x[0]!=='0'&&!r.includes(x.slice(1))) r.push(x.slice(1)); });   // อักษรนำหน้า (พ./H) อาจถูกอ่านเป็นเลข
+  return r;
 }
 async function scanImage(file){
   const info=$('scanInfo'), btns=[$('btnScanCam'),$('btnScanFile')];
@@ -350,15 +363,16 @@ async function scanImage(file){
   try{
     let img; try{ img=await fileToImg(file); }catch(_){ img=await fileToImg(await heicToJpeg(file)); }
     const worker=await getOcrWorker();
-    const passes=[[900,true,'11'],[900,true,'6'],[700,false,'11']];
+    const passes=[[1400,true,'11'],[1800,true,'6'],[900,true,'11']];
     let best={hn:[],name:''}; const score={}, longs=[];
-    for(const [w,bl,psm] of passes){
+    let pi=0;
+    for(const [w,bl,psm] of passes){ pi++;
       await worker.setParameters({tessedit_pageseg_mode:psm});
       const r=await worker.recognize(prepCanvas(img,w,bl));
       const p=parseOcr(r.data.text);
       Object.keys(p.hn).forEach(k=>{ score[k]=(score[k]||0)+p.hn[k]; }); longs.push(...p.longs); best.hn=rankHn(score,longs);
-      if(!best.name&&p.name) best.name=p.name;
-      if(best.hn.some(x=>x.length===9||x.length===7)&&best.name&&/^(นาย|นาง|น\.|เด็ก|ด\.|ดช|ดญ)/.test(best.name)) break;
+      const PFX=/^(นาย|นาง|น\.|เด็ก|ด\.|ดช|ดญ)/; if(p.name&&(!best.name||(!PFX.test(best.name)&&PFX.test(p.name)))) best.name=p.name;
+      if(pi>=2&&best.hn.some(x=>x.length>=8)&&best.name&&PFX.test(best.name)) break;
     }
     if(!best.hn.length&&!best.name){ info.textContent='อ่านไม่ออก ลองถ่ายใหม่ให้ชัดและเห็นเฉพาะส่วนชื่อ/HN หรือพิมพ์เอง'; return; }
     if(best.hn[0]){ $('hn').value=best.hn[0]; $('g-hn').classList.remove('err'); }
