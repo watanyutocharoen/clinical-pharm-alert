@@ -135,6 +135,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .del.go{background:var(--danger);border-color:var(--danger);color:#fff}
 .acts{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}.acts .sign{margin-left:0}
 @media(max-width:420px){.acts{width:100%;margin-left:0}.acts .sign{flex:1;width:auto}.acts .del{flex:0 0 auto}}
+.scanhint{margin-top:8px;font-size:13px;color:var(--muted)}
+.scanrow{display:flex;gap:8px;margin-top:4px}.scanrow .scanbtn{flex:1;margin-top:0}
 .scanbtn{width:100%;margin-top:8px;border:1.5px dashed var(--primary);background:var(--primary-l);color:var(--primary-d);border-radius:12px;padding:10px 12px;font:700 14px 'Sarabun',sans-serif;cursor:pointer}
 .scanbtn:disabled{opacity:.6}
 .scaninfo{margin-top:8px;font-size:13.5px;background:#fff8e6;border:1px solid #f1dca6;border-radius:10px;padding:8px 10px;color:#6b4e00}
@@ -177,7 +179,9 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
   <div class="card" id="g-hn">
     <label class="t" for="hn">3. HN<span class="req">*</span></label>
     <input type="text" id="hn" inputmode="numeric" autocomplete="off" placeholder="เช่น 6612345">
-    <button type="button" class="scanbtn" id="btnScan">📷 ถ่ายรูป / เลือกรูป label หรือหน้าจอ เพื่ออ่าน HN + ชื่อ-สกุล</button>
+    <div class="scanhint">อ่าน HN + ชื่อ-สกุล จากรูป label หรือหน้าจอ</div>
+    <div class="scanrow"><button type="button" class="scanbtn" id="btnScanCam">📷 ถ่ายรูป</button><button type="button" class="scanbtn" id="btnScanFile">🖼️ เลือกจากเครื่อง</button></div>
+    <input type="file" id="inScanCam" accept="image/*" capture="environment" hidden>
     <input type="file" id="inScan" accept="image/*" hidden>
     <div id="scanInfo" class="scaninfo" style="display:none"></div>
     <div class="msg">กรุณากรอก HN</div>
@@ -341,15 +345,14 @@ function rankHn(scores,longs){
   return Object.keys(m).sort((a,b)=>m[b]-m[a]);
 }
 async function scanImage(file){
-  const info=$('scanInfo'), btn=$('btnScan'); const old=btn.textContent;
-  btn.disabled=true; info.style.display='block'; info.textContent='กำลังอ่านรูป… (ครั้งแรกอาจช้า ต้องโหลดตัวอ่านภาพ)';
+  const info=$('scanInfo'), btns=[$('btnScanCam'),$('btnScanFile')];
+  btns.forEach(b=>b.disabled=true); info.style.display='block'; info.textContent='กำลังอ่านรูป… (ครั้งแรกอาจช้า ต้องโหลดตัวอ่านภาพ)';
   try{
     let img; try{ img=await fileToImg(file); }catch(_){ img=await fileToImg(await heicToJpeg(file)); }
     const worker=await getOcrWorker();
     const passes=[[900,true,'11'],[900,true,'6'],[700,false,'11']];
     let best={hn:[],name:''}; const score={}, longs=[];
     for(const [w,bl,psm] of passes){
-      btn.textContent='กำลังอ่านรูป…';
       await worker.setParameters({tessedit_pageseg_mode:psm});
       const r=await worker.recognize(prepCanvas(img,w,bl));
       const p=parseOcr(r.data.text);
@@ -367,10 +370,11 @@ async function scanImage(file){
     if(!best.hn[0]){ const d=document.createElement('div'); d.textContent='ไม่พบเลข HN ในรูป กรุณาพิมพ์เอง'; info.appendChild(d); }
     if(!best.name){ const d=document.createElement('div'); d.textContent='ไม่พบชื่อ-สกุลในรูป กรุณาพิมพ์เอง'; info.appendChild(d); }
   }catch(e){ info.textContent='อ่านรูปไม่ได้: '+(e.message||e)+' · พิมพ์เองได้เลย'; }
-  finally{ btn.disabled=false; btn.textContent=old; $('inScan').value=''; }
+  finally{ btns.forEach(b=>b.disabled=false); $('inScan').value=''; $('inScanCam').value=''; }
 }
-$('btnScan').onclick=()=>$('inScan').click();
-$('inScan').onchange=e=>{ const f=e.target.files[0]; if(f) scanImage(f); };
+$('btnScanCam').onclick=()=>$('inScanCam').click();
+$('btnScanFile').onclick=()=>$('inScan').click();
+['inScanCam','inScan'].forEach(id=>$(id).onchange=e=>{ const f=e.target.files[0]; if(f) scanImage(f); });
 
 /* ---------- รูป ---------- */
 $('btnCam').onclick = ()=>$('inCam').click();
