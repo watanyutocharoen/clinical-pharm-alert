@@ -492,8 +492,8 @@ async function loadPharmacists(){
   try{ applyList(await fresh); }
   catch(e){
     console.warn('pharmacist list failed',e);
-    pharmLoaded=false;                                // โหลดไม่ได้ → ยอมให้พิมพ์ชื่อเองได้
-    $('pharm').placeholder='พิมพ์ชื่อเภสัชกร (โหลดรายชื่อไม่สำเร็จ)';
+    pharmLoaded=false;                                // โหลดไม่ได้ → ห้ามพิมพ์ชื่อเอง ให้ลองโหลดใหม่
+    $('pharm').placeholder='โหลดรายชื่อไม่สำเร็จ — แตะเพื่อลองใหม่';
   }
 }
 function pharmMatches(q){
@@ -502,7 +502,11 @@ function pharmMatches(q){
 }
 function openPharmList(q){
   const box=$('pharmList'); box.innerHTML=''; pharmHl=-1;
-  if(!pharmLoaded){ box.hidden=true; return; }
+  if(!pharmLoaded){
+    const d=document.createElement('button'); d.type='button'; d.textContent='โหลดรายชื่อเภสัชกรไม่สำเร็จ — แตะเพื่อโหลดใหม่';
+    d.onclick=async()=>{ d.textContent='กำลังโหลด…'; await loadPharmacists(); openPharmList($('pharm').value); };
+    box.appendChild(d); box.hidden=false; return;
+  }
   const items=pharmMatches(q);
   if(!items.length){
     const d=document.createElement('div'); d.className='none';
@@ -529,7 +533,7 @@ $('pharm').addEventListener('focus',()=>{
 $('pharm').addEventListener('input',e=>{
   const v=e.target.value;
   const exact=pharmList.find(n=>nameKey(n)===nameKey(v));
-  pharmChosen = pharmLoaded ? (exact||'') : normName(v);
+  pharmChosen = exact||'';   // พิมพ์ = ค้นหาเท่านั้น ต้องกดเลือกจากรายการ
   $('pharmBox').classList.toggle('has',!!v);
   $('ackForm').classList.remove('err');
   openPharmList(v);
@@ -550,10 +554,10 @@ $('pharmClr').onclick=()=>{
 document.addEventListener('pointerdown',e=>{ if(!e.target.closest('#pharmBox')) closePharmList(); });
 
 $('ackBtn').onclick=async ()=>{
-  // รายชื่อโหลดได้ → ต้องเลือกจากรายการ; โหลดไม่ได้ → ใช้ชื่อที่พิมพ์
-  const name = pharmLoaded ? pharmChosen : normName($('pharm').value);
+  // ต้องเลือกจากรายการเท่านั้น (พิมพ์ได้เพื่อค้นหา)
+  const name = pharmLoaded ? pharmChosen : '';
   if(!name){
-    $('pharmMsg').textContent = pharmLoaded ? 'กรุณาเลือกชื่อเภสัชกรจากรายการ' : 'กรุณาลงชื่อเภสัชกร';
+    $('pharmMsg').textContent = pharmLoaded ? 'กรุณากดเลือกชื่อเภสัชกรจากรายการ (พิมพ์เพื่อค้นหาเท่านั้น)' : 'โหลดรายชื่อเภสัชกรไม่สำเร็จ แตะช่องชื่อเพื่อโหลดใหม่';
     $('ackForm').classList.add('err'); return;
   }
   if(!ackCase) return;
