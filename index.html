@@ -136,6 +136,17 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .acts{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}.acts .sign{margin-left:0}
 @media(max-width:420px){.acts{width:100%;margin-left:0}.acts .sign{flex:1;width:auto}.acts .del{flex:0 0 auto}}
 
+
+#rateCard{text-align:center;padding:22px 16px}
+#rateCard h3{margin:0 0 4px;font-size:18px}
+#rateCard p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.rates{display:flex;gap:10px;justify-content:center}
+.rates button{flex:1;max-width:120px;border:2px solid var(--line,#dfe6ec);background:#fff;border-radius:16px;padding:12px 4px 10px;font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;-webkit-tap-highlight-color:transparent}
+.rates button span{font-size:46px;line-height:1}
+.rates button small{font-size:14px;font-weight:600;color:var(--text,#222)}
+.rates button:active,.rates button.on{border-color:var(--primary);background:var(--primary-l)}
+.rates button:disabled{opacity:.55}
+.rate-b{display:inline-block;font-size:12.5px;background:#f0f3f6;border-radius:99px;padding:1px 9px}
 </style>
 </head>
 <body>
@@ -215,6 +226,15 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
     <div class="kv"><span>ชื่อ-สกุล</span><b id="ackName"></b></div>
     <div class="kv"><span>แจ้งเมื่อ</span><b id="ackAt"></b></div>
     <div class="dtl"><span>รายละเอียด</span><div id="ackDetail"></div></div>
+  </div>
+  <div class="card" id="rateCard" style="display:none">
+    <h3>ขอความกรุณาผู้ป่วยประเมินความพึงพอใจ</h3>
+    <p>การให้บริการจ่ายยาของเภสัชกรวันนี้</p>
+    <div class="rates" id="rates">
+      <button type="button" data-s="1"><span>🙁</span><small>ควรปรับปรุง</small></button>
+      <button type="button" data-s="2"><span>😐</span><small>พอใช้</small></button>
+      <button type="button" data-s="3"><span>😄</span><small>ดีมาก</small></button>
+    </div>
   </div>
   <div class="card" id="ackForm" style="display:none">
     <label class="t" for="pharm">เภสัชกรผู้ดำเนินการ<span class="req">*</span></label>
@@ -391,6 +411,26 @@ async function init(){
 }
 
 /* ---------- หน้ายืนยัน "ดำเนินการแล้ว" (เปิดจากปุ่มในการ์ด) ---------- */
+const HM_SERVICE='จ่ายยาผู้ป่วยกลับบ้าน (H/M)';
+const RATE_TXT={1:['🙁','ควรปรับปรุง'],2:['😐','พอใช้'],3:['😄','ดีมาก']};
+async function openAckForm(){
+  $('rateCard').style.display='none'; $('ackForm').style.display='block';
+  await loadPharmacists();
+  let saved=''; try{ saved=localStorage.getItem('pharmName')||''; }catch(_){}
+  const hit = pharmList.find(n=>nameKey(n)===nameKey(saved));
+  if(hit) choosePharm(hit);                       // จำชื่อที่เคยเลือกไว้ในเครื่องนี้
+  setTimeout(()=>{ try{ $('ackForm').scrollIntoView({block:'start',behavior:'smooth'}); }catch(_){} },150);
+}
+document.querySelectorAll('#rates button').forEach(b=>b.onclick=async ()=>{
+  if(!ackCase) return;
+  const all=document.querySelectorAll('#rates button'); all.forEach(x=>x.disabled=true); b.classList.add('on');
+  try{
+    await postGAS({action:'rate',id:ackCase.id,score:Number(b.dataset.s)});   // บันทึกอัตโนมัติทันทีที่ผู้ป่วยกด
+    ackCase.data.rating=Number(b.dataset.s);
+    toast('ขอบคุณสำหรับการประเมินค่ะ 🙏');
+    await openAckForm();
+  }catch(e){ all.forEach(x=>x.disabled=false); b.classList.remove('on'); toast('บันทึกไม่สำเร็จ ลองกดอีกครั้ง: '+(e.message||e)); }
+});
 let ackCase=null;
 function renderAckDone(data, already){
   $('ackForm').style.display='none';
@@ -401,6 +441,7 @@ function renderAckDone(data, already){
   const p1=document.createElement('p'); p1.textContent='เภสัชกรผู้ดำเนินการ: '+(data.pharmacist||'-');
   const p2=document.createElement('p'); p2.textContent=data.doneAt?('เมื่อ '+data.doneAt):'';
   box.append(ck,h,p1,p2);
+  if(data.service===HM_SERVICE&&data.rating){ const p3=document.createElement('p'); p3.textContent='ความพึงพอใจของผู้ป่วย: '+RATE_TXT[data.rating][0]+' '+RATE_TXT[data.rating][1]; box.append(p3); }
 }
 async function showAck(id){
   $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; $('ackView').style.display='block';
@@ -414,11 +455,8 @@ async function showAck(id){
     $('ackAt').textContent=c.reportedAt; $('ackName').textContent=c.pname||'-'; $('ackDetail').textContent=c.detail||'-';
     if(c.status==='ลบแล้ว'){ $('ackService').textContent='🗑 เคสนี้ถูกลบแล้ว'; return; }
     if(c.status==='ดำเนินการแล้ว'){ renderAckDone(c,true); return; }
-    $('ackForm').style.display='block';
-    await loadPharmacists();
-    let saved=''; try{ saved=localStorage.getItem('pharmName')||''; }catch(_){}
-    const hit = pharmList.find(n=>nameKey(n)===nameKey(saved));
-    if(hit) choosePharm(hit);                       // จำชื่อที่เคยเลือกไว้ในเครื่องนี้
+    if(c.service===HM_SERVICE&&!c.rating){ $('rateCard').style.display='block'; return; }   // จ่ายยากลับบ้าน: ให้ผู้ป่วยประเมินก่อน แล้วจึงลงชื่อ
+    await openAckForm();
   }catch(e){
     console.error(e);
     $('ackService').textContent='โหลดไม่สำเร็จ';
@@ -773,12 +811,12 @@ async function makeReport(){
     matrix('รายวัน','วันที่',dateRange(first,lastD).reverse(),c=>c.date,fmtD);
     matrix('รายเดือน','เดือน',monthRange(first.slice(0,7),lastD.slice(0,7)).reverse(),c=>c.date.slice(0,7),fmtM);
     const ws=wb.addWorksheet('ข้อมูลดิบ',{views:[{state:'frozen',ySplit:1}]});
-    ws.columns=[{header:'วันที่',key:'date',width:12},{header:'เวลา',key:'time',width:8},{header:'วอร์ด',key:'ward',width:9},{header:'Service',key:'service',width:26},{header:'HN',key:'hn',width:13},{header:'ชื่อ-นามสกุล',key:'pname',width:26},{header:'รายละเอียด',key:'detail',width:60},{header:'สถานะ',key:'st',width:16},{header:'เภสัชกรผู้ดำเนินการ',key:'ph',width:30},{header:'เวลาดำเนินการ',key:'da',width:17}];
+    ws.columns=[{header:'วันที่',key:'date',width:12},{header:'เวลา',key:'time',width:8},{header:'วอร์ด',key:'ward',width:9},{header:'Service',key:'service',width:26},{header:'HN',key:'hn',width:13},{header:'ชื่อ-นามสกุล',key:'pname',width:26},{header:'รายละเอียด',key:'detail',width:60},{header:'สถานะ',key:'st',width:16},{header:'เภสัชกรผู้ดำเนินการ',key:'ph',width:30},{header:'เวลาดำเนินการ',key:'da',width:17},{header:'ความพึงพอใจ',key:'rt',width:14}];
     styleHead(ws.getRow(1));
-    cases.forEach(c=>{ const r=ws.addRow({date:fmtD(c.date),time:c.time,ward:c.ward,service:c.service,hn:String(c.hn),pname:c.pname||'',detail:c.detail,st:c.done?'ดำเนินการแล้ว':'รอดำเนินการ',ph:c.pharmacist,da:c.doneAt?(fmtD(c.doneAt.slice(0,10))+' '+c.doneAt.slice(11)):''});
+    cases.forEach(c=>{ const r=ws.addRow({date:fmtD(c.date),time:c.time,ward:c.ward,service:c.service,hn:String(c.hn),pname:c.pname||'',detail:c.detail,st:c.done?'ดำเนินการแล้ว':'รอดำเนินการ',rt:c.rating?RATE_TXT[c.rating][1]:'',ph:c.pharmacist,da:c.doneAt?(fmtD(c.doneAt.slice(0,10))+' '+c.doneAt.slice(11)):''});
       r.getCell('hn').numFmt='@'; r.getCell('detail').alignment={wrapText:true,vertical:'top'};
       r.getCell('st').font={color:{argb:c.done?'FF0B5F53':'FFB26A00'},bold:true}; });
-    ws.autoFilter={from:'A1',to:'J1'};
+    ws.autoFilter={from:'A1',to:'K1'};
     ws.eachRow(r=>{ r.eachCell(c=>{ c.font={name:'Sarabun',...(c.font||{})}; }); });
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -830,6 +868,7 @@ function renderCases(){
     return `<div class="cs ${c.done?'ok':''}">
       <div class="top"><span class="sv2">${esc(c.service)}</span><span class="wd">${esc(c.ward)}</span><span class="tm">${esc(c.time)} น.</span></div>
       <div class="hn">HN <b>${esc(c.hn)}</b>${c.pname?` · <b>${esc(c.pname)}</b>`:''}</div>
+      ${c.rating?`<div class="st"><span class="rate-b">ความพึงพอใจ ${RATE_TXT[c.rating][0]} ${RATE_TXT[c.rating][1]}</span></div>`:''}
       ${c.detail?`<div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>`:''}${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
       <div class="st">${c.done
         ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>`
