@@ -147,6 +147,11 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .rates button:active,.rates button.on{border-color:var(--primary);background:var(--primary-l)}
 .rates button:disabled{opacity:.55}
 .rate-b{display:inline-block;font-size:12.5px;background:#f0f3f6;border-radius:99px;padding:1px 9px}
+.sat{margin-top:12px;background:#f7fbfa;border:1px solid #d7ebe7;border-radius:12px;padding:10px 10px 12px}
+.sat .sh{font-size:13px;font-weight:600;color:var(--primary-d);margin-bottom:8px}
+.sat .sg{display:flex;gap:8px}
+.sat .sc{flex:1;background:#fff;border-radius:10px;padding:8px 4px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px}
+.sat .sc .e{font-size:28px;line-height:1.1}.sat .sc b{font-size:20px}.sat .sc small{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -868,7 +873,7 @@ function renderCases(){
     return `<div class="cs ${c.done?'ok':''}">
       <div class="top"><span class="sv2">${esc(c.service)}</span><span class="wd">${esc(c.ward)}</span><span class="tm">${esc(c.time)} น.</span></div>
       <div class="hn">HN <b>${esc(c.hn)}</b>${c.pname?` · <b>${esc(c.pname)}</b>`:''}</div>
-      ${c.rating?`<div class="st"><span class="rate-b">ความพึงพอใจ ${RATE_TXT[c.rating][0]} ${RATE_TXT[c.rating][1]}</span></div>`:''}
+      ${c.rating?`<div class="st"><span class="rate-b">ความพึงพอใจ ${RATE_TXT[c.rating][0]} ${RATE_TXT[c.rating][1]}</span></div>`:(c.service===HM_SERVICE?`<div class="st"><span class="rate-b" style="color:var(--muted)">ความพึงพอใจ: ยังไม่ได้ประเมิน</span></div>`:'')}
       ${c.detail?`<div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>`:''}${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
       <div class="st">${c.done
         ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>`
@@ -880,6 +885,13 @@ function renderCases(){
     deleteCase(b.dataset.id,b);
   });
   box.querySelectorAll('.sign').forEach(b=>b.onclick=()=>{ location.href=location.pathname+'?case='+encodeURIComponent(b.dataset.id); });
+}
+function satBlock(rows){   // สรุปความพึงพอใจ เฉพาะจ่ายยากลับบ้าน (H/M)
+  const hm=rows.filter(r=>r[2]===HM_SERVICE); if(!hm.length) return '';
+  const n=k=>hm.filter(r=>(r[4]||0)===k).length, rated=hm.length-n(0);
+  const avg=rated?((n(1)+n(2)*2+n(3)*3)/rated).toFixed(2):'-';
+  const cell=k=>{ const c=n(k), p=rated?Math.round(c*100/rated):0; return `<div class="sc"><span class="e">${RATE_TXT[k][0]}</span><b>${c}</b><small>${RATE_TXT[k][1]}${rated?' · '+p+'%':''}</small></div>`; };
+  return `<div class="sat"><div class="sh">😊 ความพึงพอใจ · จ่ายยากลับบ้าน (ประเมินแล้ว ${rated}/${hm.length} เคส · เฉลี่ย ${avg}/3)</div><div class="sg">${cell(3)}${cell(2)}${cell(1)}</div></div>`;
 }
 function renderDash(){
   const rows=dash.rows, today=dash.today;
@@ -901,6 +913,7 @@ function renderDash(){
       <div class="pick"><button type="button" id="dPrev">‹</button><input type="date" id="dPick" value="${dd}" max="${today}"><button type="button" id="dNext">›</button></div>
       <div class="tot">${fmtDay(dd)}${dd===today?' (วันนี้)':''} · รวม <b>${dRows.length}</b> เคส · รับแล้ว ${dRows.filter(r=>r[3]).length}</div>
       ${svcBreak(dRows)}
+      ${satBlock(dRows)}
       <h3 style="margin:14px 0 6px;font-size:15px">รายการเคส</h3>
       <div class="fl" id="dFilter"></div>
       <div id="dCases"><div class="dmsg">กำลังโหลดรายการ…</div></div>
@@ -910,12 +923,14 @@ function renderDash(){
       <div class="tot">${TH_M[mm-1]} ${yy+543} · รวม <b>${mRows.length}</b> เคส · รับแล้ว ${mRows.filter(r=>r[3]).length}</div>
       ${chart(perDay,perDay.map((_,i)=>i+1),dim>28?3:2)}
       <h3 style="margin-top:14px;font-size:15px">แยกตาม Service และวอร์ด</h3>${svcBreak(mRows)}
+      ${satBlock(mRows)}
     </div>
     <div class="dsec"><h3>รายปี</h3>
       <div class="pick"><button type="button" id="yPrev">‹</button><select id="yPick">${years.map(y=>`<option value="${y}"${y===yr?' selected':''}>พ.ศ. ${+y+543} (${y})</option>`).join('')}</select><button type="button" id="yNext">›</button></div>
       <div class="tot">ปี ${+yr+543} · รวม <b>${yRows.length}</b> เคส · รับแล้ว ${yRows.filter(r=>r[3]).length}</div>
       ${chart(perMonth,TH_M,1)}
       <h3 style="margin-top:14px;font-size:15px">แยกตาม Service และวอร์ด</h3>${svcBreak(yRows)}
+      ${satBlock(yRows)}
     </div>`;
   const shiftD=n=>{const x=addDays(dd,n); if(x<=today){dash.d=x; renderDash();}};
   $('dPrev').onclick=()=>shiftD(-1); $('dNext').onclick=()=>shiftD(1);
