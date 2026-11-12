@@ -393,7 +393,13 @@ function getCaseId(){
   return c ? c.trim() : '';
 }
 // ถ้าเปิดมาจากปุ่ม "ดำเนินการแล้ว" ให้ซ่อนฟอร์มแจ้งเคสทันที (กันภาพกระพริบ)
-if(getCaseId()){ $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; }
+if(getCaseId()){ $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; $('ackView').style.display='block'; }
+/* โหลดข้อมูลเคสกับรายชื่อเภสัชกรขนานกันตั้งแต่เปิดหน้า ไม่รอ LINE login ก่อน */
+const PRE={};
+(function(){ const id=getCaseId(); if(!id||!CONFIG.GAS_URL) return;
+  PRE.get=fetch(CONFIG.GAS_URL+'?action=get&id='+encodeURIComponent(id)).then(r=>r.json()).catch(()=>null);
+  PRE.pharm=fetch(CONFIG.GAS_URL+'?action=pharmacists').then(r=>r.json()).catch(()=>null);
+})();
 
 async function init(){
   if(!CONFIG.LIFF_ID){
@@ -452,8 +458,8 @@ async function showAck(id){
   $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; $('ackView').style.display='block';
   try{
     if(!CONFIG.GAS_URL) throw new Error('ยังไม่ได้ตั้งค่า GAS_URL');
-    const r=await fetch(CONFIG.GAS_URL+'?action=get&id='+encodeURIComponent(id));
-    const j=await r.json();
+    let j=PRE.get?await PRE.get:null; PRE.get=null;
+    if(!j){ const r=await fetch(CONFIG.GAS_URL+'?action=get&id='+encodeURIComponent(id)); j=await r.json(); }
     if(!j.ok) throw new Error(j.error||'โหลดข้อมูลไม่สำเร็จ');
     const c=j.data; ackCase={id,data:c};
     $('ackService').textContent=c.service; $('ackWard').textContent=c.ward; $('ackHn').textContent=c.hn;
@@ -473,13 +479,18 @@ let pharmList=[], pharmChosen='', pharmLoaded=false, pharmHl=-1;
 const normName = s => String(s||'').replace(/\s+/g,' ').trim();
 const nameKey  = s => normName(s).toLowerCase().replace(/\s+/g,'');   // ค้นหาโดยไม่สนช่องว่าง/ตัวพิมพ์
 async function loadPharmacists(){
-  try{
-    const r=await fetch(CONFIG.GAS_URL+'?action=pharmacists');
-    const j=await r.json();
+  const applyList=l=>{ pharmList=(l||[]).map(normName).filter(Boolean); pharmLoaded=pharmList.length>0; };
+  let cached=null; try{ cached=JSON.parse(localStorage.getItem('pharmListCache')||'null'); }catch(_){}
+  const fresh=(async()=>{
+    let j=PRE.pharm?await PRE.pharm:null; PRE.pharm=null;
+    if(!j){ const r=await fetch(CONFIG.GAS_URL+'?action=pharmacists'); j=await r.json(); }
     if(!j.ok) throw new Error(j.error||'โหลดรายชื่อไม่สำเร็จ');
-    pharmList=(j.list||[]).map(normName).filter(Boolean);
-    pharmLoaded=pharmList.length>0;
-  }catch(e){
+    try{ localStorage.setItem('pharmListCache',JSON.stringify(j.list||[])); }catch(_){}
+    return j.list||[];
+  })();
+  if(cached&&cached.length){ applyList(cached); fresh.then(applyList).catch(()=>{}); return; }   // มีแคช → ใช้ทันที แล้วอัปเดตเบื้องหลัง
+  try{ applyList(await fresh); }
+  catch(e){
     console.warn('pharmacist list failed',e);
     pharmLoaded=false;                                // โหลดไม่ได้ → ยอมให้พิมพ์ชื่อเองได้
     $('pharm').placeholder='พิมพ์ชื่อเภสัชกร (โหลดรายชื่อไม่สำเร็จ)';
@@ -721,13 +732,15 @@ async function loadDash(force){
   if(dash.loading) return;
   if(dash.rows && !force){ renderDash(); return; }
   dash.loading=true;
+  if(!dash.rows){ try{ const c=JSON.parse(localStorage.getItem('dashCache')||'null'); if(c&&c.rows){ dash.rows=c.rows; dash.today=c.today; dash._stale=true; if(!dash.ym) dash.ym=dash.today.slice(0,7); if(!dash.y) dash.y=dash.today.slice(0,4); renderDash(); } }catch(_){} }   // แสดงข้อมูลเดิมทันที แล้วค่อยอัปเดต
   if(!dash.rows) $('dBody').innerHTML='<div class="dmsg">กำลังโหลด…</div>';
   try{
     if(!CONFIG.GAS_URL) throw new Error('no url');
     const r=await fetch(CONFIG.GAS_URL+'?action=stats');
     const j=await r.json();
     if(!j.ok||!j.rows) throw new Error('bad');
-    dash.rows=j.rows; dash.today=j.today||bkkToday();
+    dash.rows=j.rows; dash.today=j.today||bkkToday(); dash._stale=false;
+    try{ localStorage.setItem('dashCache',JSON.stringify({rows:j.rows,today:dash.today})); }catch(_){}
     if(!dash.ym) dash.ym=dash.today.slice(0,7);
     if(!dash.y) dash.y=dash.today.slice(0,4);
     renderDash();
@@ -836,13 +849,15 @@ $('dReport').onclick=makeReport;
 /* ---------- รายการเคสรายวัน ---------- */
 async function loadDayCases(d,force){
   if(!force && dash.days[d]){ renderCases(); return; }
-  $('dCases').innerHTML='<div class="dmsg">กำลังโหลดรายการ…</div>';
+  let hadCache=false; try{ const c=JSON.parse(localStorage.getItem('dayCache_'+d)||'null'); if(c){ dash.days[d]=c; hadCache=true; if(dash.d===d) renderCases(); } }catch(_){}
+  if(!hadCache) $('dCases').innerHTML='<div class="dmsg">กำลังโหลดรายการ…</div>';
   try{
     const r=await fetch(CONFIG.GAS_URL+'?action=day&date='+encodeURIComponent(d));
     const j=await r.json();
     if(!j.ok||!j.cases) throw new Error('bad');
     dash.days[d]=j.cases; delete dash.dayErr[d];
-  }catch(e){ dash.dayErr[d]=1; }
+    try{ localStorage.setItem('dayCache_'+d,JSON.stringify(j.cases)); }catch(_){}
+  }catch(e){ if(!hadCache) dash.dayErr[d]=1; }
   if(dash.d===d) renderCases();
 }
 async function deleteCase(id,btn){
