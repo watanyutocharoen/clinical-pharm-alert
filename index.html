@@ -145,7 +145,10 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
 .rates button span{font-size:46px;line-height:1}
 .rates button small{font-size:14px;font-weight:600;color:var(--text,#222)}
 .rates button:active,.rates button.on{border-color:var(--primary);background:var(--primary-l)}
+.rates button.cur{outline:2px dashed var(--primary);outline-offset:2px}
 .rates button:disabled{opacity:.55}
+.rate-edit{border:1px solid var(--line,#dfe6ec);background:#fff;border-radius:99px;padding:3px 12px;font:600 13px 'Sarabun',sans-serif;cursor:pointer;color:var(--text,#222)}
+#rateLine{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:12px 16px}
 .rate-b{display:inline-block;font-size:12.5px;background:#f0f3f6;border-radius:99px;padding:1px 9px}
 .sat{margin-top:12px;background:#f7fbfa;border:1px solid #d7ebe7;border-radius:12px;padding:10px 10px 12px}
 .sat .sh{font-size:13px;font-weight:600;color:var(--primary-d);margin-bottom:8px}
@@ -233,14 +236,16 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
     <div class="dtl"><span>รายละเอียด</span><div id="ackDetail"></div></div>
   </div>
   <div class="card" id="rateCard" style="display:none">
-    <h3>ขอความกรุณาผู้ป่วยประเมินความพึงพอใจ</h3>
-    <p>การให้บริการจ่ายยาของเภสัชกรวันนี้</p>
+    <h3 id="rateTitle">ขอความกรุณาผู้ป่วยประเมินความพึงพอใจ</h3>
+    <p id="rateSub">การให้บริการจ่ายยาของเภสัชกรวันนี้</p>
     <div class="rates" id="rates">
       <button type="button" data-s="1"><span>🙁</span><small>ควรปรับปรุง</small></button>
       <button type="button" data-s="2"><span>😐</span><small>พอใช้</small></button>
       <button type="button" data-s="3"><span>😄</span><small>ดีมาก</small></button>
     </div>
+    <button type="button" id="rateCancel" class="rate-edit" style="display:none;margin-top:12px">ยกเลิกการแก้ไข</button>
   </div>
+  <div class="card" id="rateLine" style="display:none"></div>
   <div class="card" id="ackForm" style="display:none">
     <label class="t" for="pharm">เภสัชกรผู้ดำเนินการ<span class="req">*</span></label>
     <div class="combo" id="pharmBox">
@@ -425,21 +430,42 @@ async function init(){
 const HM_SERVICE='จ่ายยาผู้ป่วยกลับบ้าน (H/M)';
 const RATE_TXT={1:['🙁','ควรปรับปรุง'],2:['😐','พอใช้'],3:['😄','ดีมาก']};
 async function openAckForm(){
-  $('rateCard').style.display='none'; $('ackForm').style.display='block';
+  $('rateCard').style.display='none'; $('ackForm').style.display='block'; showRateLine();
   await loadPharmacists();
   let saved=''; try{ saved=localStorage.getItem('pharmName')||''; }catch(_){}
   const hit = pharmList.find(n=>nameKey(n)===nameKey(saved));
   if(hit) choosePharm(hit);                       // จำชื่อที่เคยเลือกไว้ในเครื่องนี้
   setTimeout(()=>{ try{ $('ackForm').scrollIntoView({block:'start',behavior:'smooth'}); }catch(_){} },150);
 }
+function showRateLine(){
+  const d=ackCase&&ackCase.data, el=$('rateLine');
+  if(!d||d.service!==HM_SERVICE||!d.rating||d.status==='ลบแล้ว'){ el.style.display='none'; return; }
+  el.innerHTML=''; const t=document.createElement('span'); t.textContent='ความพึงพอใจของผู้ป่วย: '+RATE_TXT[d.rating][0]+' '+RATE_TXT[d.rating][1];
+  const b=document.createElement('button'); b.type='button'; b.className='rate-edit'; b.textContent='✏️ แก้ไข'; b.onclick=()=>openRateEdit();
+  el.append(t,b); el.style.display='flex';
+}
+function openRateEdit(){
+  $('rateTitle').textContent='แก้ไขการประเมินความพึงพอใจ'; $('rateSub').textContent='แตะเพื่อเลือกคะแนนใหม่ (บันทึกทับของเดิมทันที)';
+  document.querySelectorAll('#rates button').forEach(x=>{x.disabled=false; x.classList.remove('on'); x.classList.toggle('cur',Number(x.dataset.s)===ackCase.data.rating);});
+  $('rateCancel').style.display='inline-block'; $('rateCard').style.display='block'; $('rateLine').style.display='none';
+  try{ $('rateCard').scrollIntoView({block:'center',behavior:'smooth'}); }catch(_){}
+}
+$('rateCancel').onclick=()=>{ $('rateCard').style.display='none'; showRateLine(); };
 document.querySelectorAll('#rates button').forEach(b=>b.onclick=async ()=>{
   if(!ackCase) return;
+  const editing=!!ackCase.data.rating, sc=Number(b.dataset.s);
   const all=document.querySelectorAll('#rates button'); all.forEach(x=>x.disabled=true); b.classList.add('on');
   try{
-    await postGAS({action:'rate',id:ackCase.id,score:Number(b.dataset.s)});   // บันทึกอัตโนมัติทันทีที่ผู้ป่วยกด
-    ackCase.data.rating=Number(b.dataset.s);
-    toast('ขอบคุณสำหรับการประเมินค่ะ 🙏');
-    await openAckForm();
+    await postGAS({action:'rate',id:ackCase.id,score:sc,edit:editing});   // บันทึกอัตโนมัติทันทีที่กด
+    ackCase.data.rating=sc;
+    try{ localStorage.removeItem('dayCache_'+(ackCase.data.date||'')); }catch(_){}
+    if(editing){
+      toast('แก้ไขการประเมินแล้ว ✓'); $('rateCard').style.display='none';
+      if(ackCase.data.status==='ดำเนินการแล้ว') renderAckDone(ackCase.data,true); else showRateLine();
+    }else{
+      toast('ขอบคุณสำหรับการประเมินค่ะ 🙏');
+      await openAckForm();
+    }
   }catch(e){ all.forEach(x=>x.disabled=false); b.classList.remove('on'); toast('บันทึกไม่สำเร็จ ลองกดอีกครั้ง: '+(e.message||e)); }
 });
 let ackCase=null;
@@ -452,7 +478,7 @@ function renderAckDone(data, already){
   const p1=document.createElement('p'); p1.textContent='เภสัชกรผู้ดำเนินการ: '+(data.pharmacist||'-');
   const p2=document.createElement('p'); p2.textContent=data.doneAt?('เมื่อ '+data.doneAt):'';
   box.append(ck,h,p1,p2);
-  if(data.service===HM_SERVICE&&data.rating){ const p3=document.createElement('p'); p3.textContent='ความพึงพอใจของผู้ป่วย: '+RATE_TXT[data.rating][0]+' '+RATE_TXT[data.rating][1]; box.append(p3); }
+  if(data.service===HM_SERVICE&&data.rating){ const p3=document.createElement('p'); p3.textContent='ความพึงพอใจของผู้ป่วย: '+RATE_TXT[data.rating][0]+' '+RATE_TXT[data.rating][1]; box.append(p3); const eb=document.createElement('button'); eb.type='button'; eb.className='rate-edit'; eb.textContent='✏️ แก้ไขการประเมิน'; eb.onclick=()=>openRateEdit(); box.append(eb); }
 }
 async function showAck(id){
   $('formView').style.display='none'; $('bar').style.display='none'; $('tabs').style.display='none'; $('ackView').style.display='block';
@@ -892,7 +918,7 @@ function renderCases(){
     return `<div class="cs ${c.done?'ok':''}">
       <div class="top"><span class="sv2">${esc(c.service)}</span><span class="wd">${esc(c.ward)}</span><span class="tm">${esc(c.time)} น.</span></div>
       <div class="hn">HN <b>${esc(c.hn)}</b>${c.pname?` · <b>${esc(c.pname)}</b>`:''}</div>
-      ${c.rating?`<div class="st"><span class="rate-b">ความพึงพอใจ ${RATE_TXT[c.rating][0]} ${RATE_TXT[c.rating][1]}</span></div>`:(c.service===HM_SERVICE?`<div class="st"><span class="rate-b" style="color:var(--muted)">ความพึงพอใจ: ยังไม่ได้ประเมิน</span></div>`:'')}
+      ${c.rating?`<div class="st"><span class="rate-b">ความพึงพอใจ ${RATE_TXT[c.rating][0]} ${RATE_TXT[c.rating][1]}</span>${c.id?` <button type="button" class="rate-edit re" data-id="${esc(c.id)}">✏️ แก้ไข</button>`:''}</div>`:(c.service===HM_SERVICE?`<div class="st"><span class="rate-b" style="color:var(--muted)">ความพึงพอใจ: ยังไม่ได้ประเมิน</span></div>`:'')}
       ${c.detail?`<div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>`:''}${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
       <div class="st">${c.done
         ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>`
@@ -903,6 +929,7 @@ function renderCases(){
     if(!b.classList.contains('go')){ b.classList.add('go'); b.textContent='ยืนยันลบ?'; clearTimeout(b._t); b._t=setTimeout(()=>{b.classList.remove('go'); b.textContent='🗑 ลบ';},4000); return; }
     deleteCase(b.dataset.id,b);
   });
+  box.querySelectorAll('.re').forEach(b=>b.onclick=()=>{ location.href=location.pathname+'?case='+encodeURIComponent(b.dataset.id); });
   box.querySelectorAll('.sign').forEach(b=>b.onclick=()=>{ location.href=location.pathname+'?case='+encodeURIComponent(b.dataset.id); });
 }
 function satBlock(rows){   // สรุปความพึงพอใจ เฉพาะจ่ายยากลับบ้าน (H/M)
