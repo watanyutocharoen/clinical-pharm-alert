@@ -255,6 +255,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0
     </div>
     <div class="msg" id="pharmMsg">กรุณาเลือกชื่อเภสัชกรจากรายการ</div>
     <button type="button" class="bigbtn" id="ackBtn">✅ ดำเนินการแล้ว</button>
+    <button type="button" class="rate-edit" id="phCancel" style="display:none;margin:12px auto 0">ยกเลิกการแก้ไข</button>
   </div>
   <div class="card" id="ackDone" style="display:none"></div>
 </main>
@@ -469,6 +470,14 @@ document.querySelectorAll('#rates button').forEach(b=>b.onclick=async ()=>{
   }catch(e){ all.forEach(x=>x.disabled=false); b.classList.remove('on'); toast('บันทึกไม่สำเร็จ ลองกดอีกครั้ง: '+(e.message||e)); }
 });
 let ackCase=null;
+function resetAckBtn(){ const b=$('ackBtn'); b.disabled=false; b.textContent='✅ ดำเนินการแล้ว'; $('phCancel').style.display='none'; }
+async function openPharmEdit(){
+  ackCase.editPharm=true; $('ackDone').style.display='none';
+  const b=$('ackBtn'); b.disabled=false; b.textContent='💾 บันทึกชื่อใหม่'; $('phCancel').style.display='block';
+  await openAckForm();
+  const cur=pharmList.find(n=>nameKey(n)===nameKey(ackCase.data.pharmacist)); if(cur) choosePharm(cur);
+}
+$('phCancel').onclick=()=>{ ackCase.editPharm=false; resetAckBtn(); renderAckDone(ackCase.data,true); };
 function renderAckDone(data, already){
   $('ackForm').style.display='none';
   const box=$('ackDone'); box.style.display='block';
@@ -478,6 +487,7 @@ function renderAckDone(data, already){
   const p1=document.createElement('p'); p1.textContent='เภสัชกรผู้ดำเนินการ: '+(data.pharmacist||'-');
   const p2=document.createElement('p'); p2.textContent=data.doneAt?('เมื่อ '+data.doneAt):'';
   box.append(ck,h,p1,p2);
+  const pe=document.createElement('button'); pe.type='button'; pe.className='rate-edit'; pe.style.margin='6px 4px'; pe.textContent='✏️ แก้ไขชื่อเภสัชกร'; pe.onclick=()=>openPharmEdit(); box.append(pe);
   if(data.service===HM_SERVICE&&data.rating){ const p3=document.createElement('p'); p3.textContent='ความพึงพอใจของผู้ป่วย: '+RATE_TXT[data.rating][0]+' '+RATE_TXT[data.rating][1]; box.append(p3); const eb=document.createElement('button'); eb.type='button'; eb.className='rate-edit'; eb.textContent='✏️ แก้ไขการประเมิน'; eb.onclick=()=>openRateEdit(); box.append(eb); }
 }
 async function showAck(id){
@@ -588,6 +598,15 @@ $('ackBtn').onclick=async ()=>{
   }
   if(!ackCase) return;
   const btn=$('ackBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+  if(ackCase.editPharm){   // แก้ชื่อเภสัชกรของเคสที่ลงชื่อไปแล้ว
+    try{
+      const res=await postGAS({action:'repharm',id:ackCase.id,pharmacist:name});
+      try{ localStorage.setItem('pharmName',name); }catch(_){}
+      ackCase.editPharm=false; ackCase.data=res.data; toast('แก้ไขชื่อเภสัชกรแล้ว ✓');
+      resetAckBtn(); renderAckDone(res.data,true);
+    }catch(e){ toast('บันทึกไม่สำเร็จ: '+(e.message||e)); btn.disabled=false; btn.textContent='💾 บันทึกชื่อใหม่'; }
+    return;
+  }
   try{
     const res=await postGAS({action:'complete',id:ackCase.id,pharmacist:name,userId:state.profile?state.profile.userId:''});
     try{ localStorage.setItem('pharmName',name); }catch(_){}
@@ -921,7 +940,7 @@ function renderCases(){
       ${c.rating?`<div class="st"><span class="rate-b">ความพึงพอใจ ${RATE_TXT[c.rating][0]} ${RATE_TXT[c.rating][1]}</span>${c.id?` <button type="button" class="rate-edit re" data-id="${esc(c.id)}">✏️ แก้ไข</button>`:''}</div>`:(c.service===HM_SERVICE?`<div class="st"><span class="rate-b" style="color:var(--muted)">ความพึงพอใจ: ยังไม่ได้ประเมิน</span></div>`:'')}
       ${c.detail?`<div class="dt${long?' clamp':''}" id="cd${i}">${esc(c.detail)}</div>`:''}${long?`<button type="button" class="more" data-i="${i}">ดูเพิ่มเติม ▾</button>`:''}
       <div class="st">${c.done
-        ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>`
+        ?`<span class="badge d">✅ ดำเนินการแล้ว</span><span>โดย <b>${esc(c.pharmacist)}</b>${c.doneAt?' · '+esc(c.doneAt)+' น.':''}</span>${c.id?` <button type="button" class="rate-edit re" data-id="${esc(c.id)}">✏️ แก้ชื่อ</button>`:''}`
         :`<span class="badge p">⏳ รอดำเนินการ</span>${c.id?`<span class="acts"><button type="button" class="sign" data-id="${esc(c.id)}">✍️ ลงชื่อดำเนินการ</button><button type="button" class="del" data-id="${esc(c.id)}">🗑 ลบ</button></span>`:''}`}</div>
     </div>`;}).join('');
   box.querySelectorAll('.more').forEach(b=>b.onclick=()=>{const el=$('cd'+b.dataset.i); const c=el.classList.toggle('clamp'); b.textContent=c?'ดูเพิ่มเติม ▾':'ย่อ ▴';});
